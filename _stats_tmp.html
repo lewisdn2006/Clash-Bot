@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CoC Bot Statistics</title>
+<script src="chart.umd.min.js"></script>
+<!-- Rajdhani font — loaded async so it doesn't block rendering if offline -->
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #070f1a;
+    color: #c8ddf0;
+    font-family: 'Rajdhani', sans-serif;
+    padding: 24px 20px;
+    min-height: 100vh;
+  }
+
+  /* ── Header ─────────────────────────────────────────── */
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+  .header-icon { font-size: 36px; }
+  .header h1 {
+    color: #f5c842; font-size: 28px; font-weight: 800;
+    letter-spacing: 2px; text-transform: uppercase;
+  }
+  .header .sub {
+    color: #3a5ea8; font-size: 13px; letter-spacing: 2px;
+  }
+
+  /* ── Stat cards ─────────────────────────────────────── */
+  .stat-cards {
+    display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 28px;
+  }
+  .stat-card {
+    flex: 1 1 150px;
+    background: linear-gradient(135deg, #0d1b2e 0%, #0a1525 100%);
+    border: 1px solid #1e3a5f; border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  .stat-card .label {
+    color: #7aa8cc; font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .stat-card .value {
+    color: #f5c842; font-size: 26px; font-weight: 800;
+  }
+  .stat-card .sub-text {
+    color: #3a5ea8; font-size: 12px; margin-top: 4px;
+  }
+
+  /* ── Tabs ───────────────────────────────────────────── */
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
+  .tab-btn {
+    padding: 7px 16px; border-radius: 8px; cursor: pointer;
+    font-family: 'Rajdhani', sans-serif; font-size: 13px;
+    font-weight: 700; letter-spacing: 0.5px;
+    border: 2px solid #1e3a5f; background: #0d1b2e; color: #7aa8cc;
+    transition: all 0.18s;
+  }
+  .tab-btn:hover { border-color: #3a5ea8; }
+  .tab-btn.active {
+    border-color: #f5c842; background: rgba(245,200,66,0.13); color: #f5c842;
+  }
+
+  /* ── Panel ──────────────────────────────────────────── */
+  .panel {
+    background: #0a1525; border: 1px solid #1e3a5f;
+    border-radius: 14px; padding: 24px 20px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .panel-desc {
+    color: #7aa8cc; margin-bottom: 16px; font-size: 14px;
+  }
+
+  /* ── Table ──────────────────────────────────────────── */
+  .stats-table {
+    width: 100%; border-collapse: collapse; font-size: 14px;
+  }
+  .stats-table thead th {
+    padding: 10px 14px; background: #0d1b2e; color: #f5c842;
+    border-bottom: 2px solid #1e3a5f; white-space: nowrap;
+    letter-spacing: 1px; text-align: right;
+  }
+  .stats-table thead th:first-child { text-align: left; }
+  .stats-table tbody tr:nth-child(even) { background: #0a1525; }
+  .stats-table tbody tr:nth-child(odd) { background: #0d1b2e; }
+  .stats-table tbody td {
+    padding: 9px 14px; border-bottom: 1px solid #1a2e48; text-align: right;
+  }
+  .stats-table tbody td:first-child { color: #f5c842; text-align: left; }
+
+  /* ── Toggle buttons (radar / donut) ─────────────────── */
+  .toggle-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .toggle-btn {
+    padding: 5px 14px; border-radius: 20px; cursor: pointer;
+    font-family: 'Rajdhani', sans-serif; font-size: 13px;
+    font-weight: 700; transition: all 0.2s; background: transparent;
+  }
+
+  /* ── Chart container ────────────────────────────────── */
+  .chart-wrap { position: relative; width: 100%; }
+  .chart-wrap canvas { width: 100% !important; }
+
+  /* ── Donut detail ───────────────────────────────────── */
+  .donut-layout { display: flex; align-items: center; gap: 30px; flex-wrap: wrap; }
+  .donut-legend .name { color: #f5c842; font-size: 22px; font-weight: 800; margin-bottom: 12px; }
+  .donut-legend .row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .donut-legend .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .donut-legend .star-label { color: #aac; font-size: 15px; min-width: 30px; }
+  .donut-legend .star-val { color: #fff; font-size: 15px; font-weight: 700; }
+  .donut-legend .star-pct { color: #445; font-size: 13px; }
+  .donut-legend .extra { margin-top: 14px; padding-top: 14px; border-top: 1px solid #1a2e48; }
+  .donut-legend .extra p { color: #7aa8cc; font-size: 13px; margin-bottom: 2px; }
+  .donut-legend .extra strong { color: #fff; }
+  .donut-legend .extra .gold { color: #f5c842; }
+
+  /* ── Scatter inline legend ──────────────────────────── */
+  .scatter-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+  .scatter-legend span { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #7aa8cc; }
+  .scatter-legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  /* ── Loot stats (Per Account panel) ─────────────────── */
+  .donut-legend .loot { margin-top: 14px; padding-top: 14px; border-top: 1px solid #1a2e48; }
+  .loot-title { color: #f5c842; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+  .loot-table { display: grid; grid-template-columns: 52px 1fr 1fr 1fr; gap: 3px 10px; font-size: 12px; align-items: center; }
+  .loot-table .lh { color: #3a5ea8; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; padding-bottom: 4px; }
+  .loot-table .lv { color: #c8ddf0; font-weight: 700; }
+  .loot-table .gold-r { color: #f5c842; font-weight: 700; }
+  .loot-table .elix-r { color: #b06ae8; font-weight: 700; }
+  .loot-table .dark-r { color: #6ab4e8; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <span class="header-icon">⚔️</span>
+  <div>
+    <h1>CoC Bot Statistics</h1>
+    <p class="sub">AUTOMATED ATTACK · WALL UPGRADE TRACKER</p>
+  </div>
+</div>
+
+<!-- Stat cards -->
+<div class="stat-cards" id="stat-cards"></div>
+
+<!-- Tabs -->
+<div class="tabs" id="tabs"></div>
+
+<!-- Panel -->
+<div class="panel" id="panel"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// Data — Python injects real JSON here
+// ═══════════════════════════════════════════════════════════════════
+const raw = [{"name": "lewis", "time": "37:16:58", "time_seconds": 134218.16987991333, "gold": 962863023, "elixir": 955230486, "dark": 7566728, "s0": 4, "s1": 92, "s2": 256, "s3": 552, "attacks": 904, "walls": 294}, {"name": "williamleeming", "time": "148:04:07", "time_seconds": 533047.7413303852, "gold": 2906002669, "elixir": 2875749453, "dark": 24118055, "s0": 450, "s1": 1221, "s2": 963, "s3": 747, "attacks": 3381, "walls": 2025}, {"name": "steve", "time": "4:28:35", "time_seconds": 16115.435331344604, "gold": 67378042, "elixir": 61514192, "dark": 697583, "s0": 3, "s1": 35, "s2": 14, "s3": 71, "attacks": 123, "walls": 9}, {"name": "lewis8", "time": "9:22:07", "time_seconds": 33727.94060397148, "gold": 91200459, "elixir": 91076484, "dark": 785731, "s0": 4, "s1": 6, "s2": 17, "s3": 244, "attacks": 271, "walls": 30}, {"name": "lewis7", "time": "4:40:07", "time_seconds": 16807.940249443054, "gold": 53592771, "elixir": 50347505, "dark": 464216, "s0": 3, "s1": 12, "s2": 9, "s3": 118, "attacks": 142, "walls": 0}, {"name": "lewis6", "time": "5:56:18", "time_seconds": 21378.81066918373, "gold": 48950148, "elixir": 51169762, "dark": 428617, "s0": 6, "s1": 7, "s2": 16, "s3": 132, "attacks": 161, "walls": 324}, {"name": "lewis5", "time": "3:07:53", "time_seconds": 11273.256739854813, "gold": 36468894, "elixir": 34838496, "dark": 347276, "s0": 1, "s1": 2, "s2": 7, "s3": 83, "attacks": 93, "walls": 0}, {"name": "lewis4", "time": "5:47:27", "time_seconds": 20847.969385623932, "gold": 49490847, "elixir": 48599093, "dark": 487819, "s0": 1, "s1": 21, "s2": 28, "s3": 112, "attacks": 162, "walls": 244}, {"name": "lewis3", "time": "5:03:36", "time_seconds": 18216.322503566742, "gold": 41887423, "elixir": 43644687, "dark": 355576, "s0": 1, "s1": 10, "s2": 13, "s3": 130, "attacks": 154, "walls": 265}, {"name": "djbillgates24", "time": "1:21:20", "time_seconds": 4880.598420619965, "gold": 85940, "elixir": 53161, "dark": 149, "s0": 14, "s1": 7, "s2": 3, "s3": 22, "attacks": 46, "walls": 0}, {"name": "djbillgates123", "time": "1:08:18", "time_seconds": 4098.272194623947, "gold": 174191, "elixir": 159498, "dark": 357, "s0": 9, "s1": 2, "s2": 3, "s3": 28, "attacks": 42, "walls": 0}, {"name": "djbillgates25", "time": "18:10", "time_seconds": 1090.294041633606, "gold": 189581, "elixir": 156433, "dark": 4, "s0": 3, "s1": 2, "s2": 0, "s3": 5, "attacks": 10, "walls": 0}, {"name": "djbillgates26", "time": "26:18", "time_seconds": 1578.277880191803, "gold": 45062, "elixir": 34114, "dark": 9, "s0": 9, "s1": 2, "s2": 0, "s3": 7, "attacks": 18, "walls": 0}];
+
+// ── Helpers ──────────────────────────────────────────────────────
+function parseHours(t) {
+  const parts = t.split(":").map(Number);
+  if (parts.length === 3) return +(parts[0] + parts[1] / 60 + parts[2] / 3600).toFixed(2);
+  if (parts.length === 2) return +(parts[0] / 60 + parts[1] / 3600).toFixed(2);
+  return 0;
+}
+
+const data = raw.map(d => {
+  const hours = d.time_seconds ? +(d.time_seconds / 3600).toFixed(4) : parseHours(d.time);
+  const attacks = d.attacks || 1;
+  const hrs = hours || 1;
+  return {
+    ...d,
+    hours,
+    threeStarRate:    +((d.s3 / attacks) * 100).toFixed(1),
+    attacksPerHour:   +(attacks / hrs).toFixed(1),
+    totalResources:   d.gold + d.elixir + d.dark,
+    // per-attack loot
+    goldPerAttack:    Math.round(d.gold   / attacks),
+    elixirPerAttack:  Math.round(d.elixir / attacks),
+    darkPerAttack:    Math.round(d.dark   / attacks),
+    // per-hour loot
+    goldPerHour:      Math.round(d.gold   / hrs),
+    elixirPerHour:    Math.round(d.elixir / hrs),
+    darkPerHour:      Math.round(d.dark   / hrs),
+  };
+});
+
+const ACCOUNT_COLORS = [
+  "#f5c842","#e87c3e","#6ae8a0","#6ab4e8","#b06ae8",
+  "#e86a9a","#6ae8e0","#e8d46a","#a8e86a","#e8556a",
+  "#42c8f5","#c8f542","#f542c8","#42f5a8","#a842f5"
+];
+const STAR_COLORS = { s0: "#e84a4a", s1: "#e8a34a", s2: "#6ab4e8", s3: "#f5c842" };
+
+function fmt(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(0) + "K";
+  return String(n);
+}
+
+function color(i) { return ACCOUNT_COLORS[i % ACCOUNT_COLORS.length]; }
+
+// Track live chart instances so we destroy before creating
+let liveCharts = [];
+function destroyCharts() {
+  liveCharts.forEach(c => c.destroy());
+  liveCharts = [];
+}
+
+// ── Stat Cards ───────────────────────────────────────────────────
+(function renderCards() {
+  const totalAttacks = data.reduce((s, d) => s + d.attacks, 0);
+  const totalThree   = data.reduce((s, d) => s + d.s3, 0);
+  const totalRes     = data.reduce((s, d) => s + d.totalResources, 0);
+  const totalHours   = data.reduce((s, d) => s + d.hours, 0);
+  const best         = [...data].sort((a, b) => b.threeStarRate - a.threeStarRate)[0];
+
+  const cards = [
+    { label: "Total Attacks",    value: fmt(totalAttacks),                                sub: "across all accounts"   },
+    { label: "Combined 3★ Rate", value: ((totalThree / (totalAttacks||1)) * 100).toFixed(1) + "%", sub: fmt(totalThree) + " three-stars" },
+    { label: "Total Resources",  value: fmt(totalRes),                                    sub: "Gold + Elixir + Dark"  },
+    { label: "Total Hours",      value: totalHours.toFixed(0) + "h",                      sub: "bot runtime"           },
+    { label: "Best 3★ Rate",     value: best ? best.threeStarRate + "%" : "—",             sub: best ? best.name : ""   },
+  ];
+
+  document.getElementById("stat-cards").innerHTML = cards.map(c => `
+    <div class="stat-card">
+      <p class="label">${c.label}</p>
+      <p class="value">${c.value}</p>
+      <p class="sub-text">${c.sub}</p>
+    </div>
+  `).join("");
+})();
+
+// ── Tabs ─────────────────────────────────────────────────────────
+const TABS = [
+  { id: "table",       label: "📋 Raw Data"         },
+  { id: "stars",       label: "⭐ Star Breakdown"    },
+  { id: "radar",       label: "🕸️ Radar"            },
+  { id: "resources",   label: "💰 Resources"         },
+  { id: "scatter",     label: "📈 Efficiency Plot"   },
+  { id: "leaderboard", label: "🏆 3★ Leaderboard"   },
+  { id: "donut",       label: "🍩 Per Account"       },
+];
+
+let activeTab = "table";
+
+function renderTabs() {
+  document.getElementById("tabs").innerHTML = TABS.map(t =>
+    `<button class="tab-btn ${t.id === activeTab ? 'active' : ''}"
+             data-tab="${t.id}">${t.label}</button>`
+  ).join("");
+
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      activeTab = btn.dataset.tab;
+      renderTabs();
+      renderPanel();
+    });
+  });
+}
+
+// ── Panel router ─────────────────────────────────────────────────
+function renderPanel() {
+  destroyCharts();
+  const views = {
+    table: renderTable,
+    stars: renderStars,
+    radar: renderRadar,
+    resources: renderResources,
+    scatter: renderScatter,
+    leaderboard: renderLeaderboard,
+    donut: renderDonut,
+  };
+  (views[activeTab] || renderTable)();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  VIEW RENDERERS
+// ══════════════════════════════════════════════════════════════════
+
+// ── Table ────────────────────────────────────────────────────────
+function renderTable() {
+  const headers = ["Account","Time Played","Gold","Elixir","Dark","0★","1★","2★","3★","Attacks","Walls"];
+  const keys    = ["name","time","gold","elixir","dark","s0","s1","s2","s3","attacks","walls"];
+  const panel = document.getElementById("panel");
+  panel.innerHTML = `<div style="overflow-x:auto">
+    <table class="stats-table">
+      <thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${data.map((row, ri) => `<tr>${keys.map((k, ci) => {
+        let v = row[k];
+        if (ci >= 2 && ci <= 4) v = fmt(v);
+        return `<td>${v}</td>`;
+      }).join("")}</tr>`).join("")}</tbody>
+    </table>
+  </div>`;
+}
+
+// ── Star Breakdown (grouped bar) ─────────────────────────────────
+function renderStars() {
+  const panel = document.getElementById("panel");
+  panel.innerHTML = `<p class="panel-desc">Grouped bars showing 0★ / 1★ / 2★ / 3★ counts per account</p>
+    <div class="chart-wrap"><canvas id="starChart" height="360"></canvas></div>`;
+
+  const ctx = document.getElementById("starChart").getContext("2d");
+  liveCharts.push(new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: data.map(d => d.name),
+      datasets: [
+        { label: "0★", data: data.map(d => d.s0), backgroundColor: STAR_COLORS.s0, borderRadius: 3 },
+        { label: "1★", data: data.map(d => d.s1), backgroundColor: STAR_COLORS.s1, borderRadius: 3 },
+        { label: "2★", data: data.map(d => d.s2), backgroundColor: STAR_COLORS.s2, borderRadius: 3 },
+        { label: "3★", data: data.map(d => d.s3), backgroundColor: STAR_COLORS.s3, borderRadius: 3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: "#aac", font: { family: "Rajdhani" } } } },
+      scales: {
+        x: { ticks: { color: "#7aa8cc", font: { family: "Rajdhani" } }, grid: { color: "#1a2e48" } },
+        y: { ticks: { color: "#7aa8cc" }, grid: { color: "#1a2e48" } }
+      }
+    }
+  }));
+}
+
+// ── Radar ────────────────────────────────────────────────────────
+let radarSelected = [];
+
+function renderRadar() {
+  if (radarSelected.length === 0) {
+    radarSelected = data.slice(0, Math.min(3, data.length)).map(d => d.name);
+  }
+
+  const metrics = ["threeStarRate","attacksPerHour","attacks","walls","hours"];
+  const labels  = { threeStarRate:"3★ Rate %", attacksPerHour:"Atks/Hr", attacks:"Total Attacks", walls:"Walls", hours:"Hours Played" };
+  const maxes   = {};
+  metrics.forEach(m => { maxes[m] = Math.max(...data.map(d => d[m]), 1); });
+
+  const panel = document.getElementById("panel");
+  panel.innerHTML = `<p class="panel-desc">Normalised to 100 = best across all accounts. Toggle accounts to compare.</p>
+    <div class="toggle-row" id="radarToggles"></div>
+    <div class="chart-wrap"><canvas id="radarChart" height="380"></canvas></div>`;
+
+  // Toggle buttons
+  const toggleRow = document.getElementById("radarToggles");
+  data.forEach((d, i) => {
+    const btn = document.createElement("button");
+    btn.className = "toggle-btn";
+    btn.textContent = d.name;
+    btn.style.border = `2px solid ${color(i)}`;
+    const active = radarSelected.includes(d.name);
+    btn.style.background = active ? color(i) + "33" : "transparent";
+    btn.style.color = active ? color(i) : "#445";
+    btn.addEventListener("click", () => {
+      if (radarSelected.includes(d.name)) radarSelected = radarSelected.filter(n => n !== d.name);
+      else radarSelected.push(d.name);
+      renderRadar();
+    });
+    toggleRow.appendChild(btn);
+  });
+
+  const datasets = data.map((d, i) => {
+    if (!radarSelected.includes(d.name)) return null;
+    return {
+      label: d.name,
+      data: metrics.map(m => +((d[m] / maxes[m]) * 100).toFixed(1)),
+      borderColor: color(i),
+      backgroundColor: color(i) + "26",
+      borderWidth: 2,
+      pointBackgroundColor: color(i),
+    };
+  }).filter(Boolean);
+
+  const ctx = document.getElementById("radarChart").getContext("2d");
+  liveCharts.push(new Chart(ctx, {
+    type: "radar",
+    data: { labels: metrics.map(m => labels[m]), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        r: {
+          beginAtZero: true, max: 100,
+          grid: { color: "#1a2e48" },
+          angleLines: { color: "#1a2e48" },
+          pointLabels: { color: "#7aa8cc", font: { family: "Rajdhani", size: 12 } },
+          ticks: { color: "#445", backdropColor: "transparent", font: { size: 10 } }
+        }
+      },
+      plugins: { legend: { labels: { color: "#aac", font: { family: "Rajdhani" } } } }
+    }
+  }));
+}
+
+// ── Resources (stacked bar) ──────────────────────────────────────
+function renderResources() {
+  const panel = document.getElementById("panel");
+  panel.innerHTML = `<p class="panel-desc">Stacked total resources looted per account</p>
+    <div class="chart-wrap"><canvas id="resChart" height="360"></canvas></div>`;
+
+  const ctx = document.getElementById("resChart").getContext("2d");
+  liveCharts.push(new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: data.map(d => d.name),
+      datasets: [
+        { label: "Gold",   data: data.map(d => d.gold),   backgroundColor: "#f5c842" },
+        { label: "Elixir", data: data.map(d => d.elixir), backgroundColor: "#b06ae8" },
+        { label: "Dark",   data: data.map(d => d.dark),   backgroundColor: "#3a5ea8" },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: "#aac", font: { family: "Rajdhani" } } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ": " + fmt(ctx.parsed.y) } }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: "#7aa8cc", font: { family: "Rajdhani" } }, grid: { color: "#1a2e48" } },
+        y: { stacked: true, ticks: { color: "#7aa8cc", callback: v => fmt(v) }, grid: { color: "#1a2e48" } }
+      }
+    }
+  }));
+}
+
+// ── Scatter (bubble) ─────────────────────────────────────────────
+function renderScatter() {
+  const panel = document.getElementById("panel");
+  panel.innerHTML = `<p class="panel-desc">X = Hours Played · Y = Total Attacks · Bubble size = 3★ Rate</p>
+    <div class="chart-wrap"><canvas id="scatterChart" height="360"></canvas></div>
+    <div class="scatter-legend" id="scatterLegend"></div>`;
+
+  const datasets = data.map((d, i) => ({
+    label: d.name,
+    data: [{ x: d.hours, y: d.attacks, r: Math.max(5, d.threeStarRate / 4) }],
+    backgroundColor: color(i) + "DD",
+    borderColor: color(i),
+    borderWidth: 1,
+  }));
+
+  const ctx = document.getElementById("scatterChart").getContext("2d");
+  liveCharts.push(new Chart(ctx, {
+    type: "bubble",
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const d = ctx.raw;
+              const name = ctx.dataset.label;
+              return [name, `Hours: ${d.x}`, `Attacks: ${d.y}`, `3★ Rate: ${data.find(dd=>dd.name===name)?.threeStarRate}%`];
+            }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: "Time Played (hrs)", color: "#445", font: { size: 12 } }, ticks: { color: "#7aa8cc" }, grid: { color: "#1a2e48" } },
+        y: { title: { display: true, text: "Total Attacks", color: "#445", font: { size: 12 } }, ticks: { color: "#7aa8cc" }, grid: { color: "#1a2e48" } }
+      }
+    }
+  }));
+
+  // Inline legend
+  document.getElementById("scatterLegend").innerHTML = data.map((d, i) =>
+    `<span><span class="dot" style="background:${color(i)}"></span>${d.name}</span>`
+  ).join("");
+}
+
+// ── Leaderboard (horizontal bar, 3★ rate) ────────────────────────
+function renderLeaderboard() {
+  const sorted = [...data].sort((a, b) => b.threeStarRate - a.threeStarRate);
+  const panel = document.getElementById("panel");
+  panel.innerHTML = `<p class="panel-desc">3★ Rate = three-star attacks ÷ total attacks × 100. Higher is better.</p>
+    <div class="chart-wrap"><canvas id="lbChart" height="320"></canvas></div>`;
+
+  const bgColors = sorted.map(d => `hsl(${40 + (d.threeStarRate / 100) * 60}, 90%, 55%)`);
+
+  const ctx = document.getElementById("lbChart").getContext("2d");
+  liveCharts.push(new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: sorted.map(d => d.name),
+      datasets: [{
+        label: "3★ Rate %",
+        data: sorted.map(d => d.threeStarRate),
+        backgroundColor: bgColors,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.parsed.x.toFixed(1) + "%" } }
+      },
+      scales: {
+        x: { max: 100, ticks: { color: "#7aa8cc", callback: v => v + "%" }, grid: { color: "#1a2e48" } },
+        y: { ticks: { color: "#f5c842", font: { family: "Rajdhani", size: 13, weight: 700 } }, grid: { display: false } }
+      }
+    }
+  }));
+}
+
+// ── Donut (per-account star pie) ─────────────────────────────────
+let donutSelected = data.length > 0 ? data[0].name : "";
+
+function renderDonut() {
+  const panel = document.getElementById("panel");
+  panel.innerHTML = `<p class="panel-desc">Star rating distribution for a single account</p>
+    <div class="toggle-row" id="donutToggles"></div>
+    <div class="donut-layout">
+      <div class="chart-wrap" style="max-width:280px"><canvas id="donutChart" width="260" height="260"></canvas></div>
+      <div class="donut-legend" id="donutLegend"></div>
+    </div>`;
+
+  // Toggle buttons
+  const toggleRow = document.getElementById("donutToggles");
+  data.forEach((d, i) => {
+    const btn = document.createElement("button");
+    btn.className = "toggle-btn";
+    btn.textContent = d.name;
+    btn.style.border = `2px solid ${color(i)}`;
+    const active = donutSelected === d.name;
+    btn.style.background = active ? color(i) : "transparent";
+    btn.style.color = active ? "#0a1525" : color(i);
+    btn.style.fontWeight = "700";
+    btn.addEventListener("click", () => { donutSelected = d.name; renderDonut(); });
+    toggleRow.appendChild(btn);
+  });
+
+  const acc = data.find(d => d.name === donutSelected) || data[0];
+  if (!acc) return;
+
+  const pieData = [
+    { label: "0★", value: acc.s0, col: STAR_COLORS.s0 },
+    { label: "1★", value: acc.s1, col: STAR_COLORS.s1 },
+    { label: "2★", value: acc.s2, col: STAR_COLORS.s2 },
+    { label: "3★", value: acc.s3, col: STAR_COLORS.s3 },
+  ].filter(d => d.value > 0);
+
+  const ctx = document.getElementById("donutChart").getContext("2d");
+  liveCharts.push(new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: pieData.map(d => d.label),
+      datasets: [{
+        data: pieData.map(d => d.value),
+        backgroundColor: pieData.map(d => d.col),
+        borderWidth: 0,
+        spacing: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: "55%",
+      plugins: { legend: { display: false } }
+    }
+  }));
+
+  // Legend
+  const attacks = acc.attacks || 1;
+  document.getElementById("donutLegend").innerHTML = `
+    <p class="name">${acc.name}</p>
+    ${pieData.map(d => `
+      <div class="row">
+        <span class="swatch" style="background:${d.col}"></span>
+        <span class="star-label">${d.label}</span>
+        <span class="star-val">${d.value}</span>
+        <span class="star-pct">(${((d.value / attacks) * 100).toFixed(1)}%)</span>
+      </div>
+    `).join("")}
+    <div class="extra">
+      <p>Total Attacks: <strong>${acc.attacks}</strong></p>
+      <p>3★ Rate: <strong class="gold">${acc.threeStarRate}%</strong></p>
+      <p>Atks/Hr: <strong>${acc.attacksPerHour}</strong></p>
+      <p>Time Played: <strong>${acc.time}</strong></p>
+      <p>Walls Upgraded: <strong>${acc.walls}</strong></p>
+    </div>
+    <div class="loot">
+      <p class="loot-title">Loot Statistics</p>
+      <div class="loot-table">
+        <span class="lh"></span>
+        <span class="lh">Total</span>
+        <span class="lh">/Attack</span>
+        <span class="lh">/Hour</span>
+        <span class="gold-r">Gold</span>
+        <span class="lv">${fmt(acc.gold)}</span>
+        <span class="lv">${fmt(acc.goldPerAttack)}</span>
+        <span class="lv">${fmt(acc.goldPerHour)}</span>
+        <span class="elix-r">Elixir</span>
+        <span class="lv">${fmt(acc.elixir)}</span>
+        <span class="lv">${fmt(acc.elixirPerAttack)}</span>
+        <span class="lv">${fmt(acc.elixirPerHour)}</span>
+        <span class="dark-r">Dark</span>
+        <span class="lv">${fmt(acc.dark)}</span>
+        <span class="lv">${fmt(acc.darkPerAttack)}</span>
+        <span class="lv">${fmt(acc.darkPerHour)}</span>
+      </div>
+    </div>
+  `;
+}
+
+// ── Boot ─────────────────────────────────────────────────────────
+renderTabs();
+renderPanel();
+</script>
+</body>
+</html>

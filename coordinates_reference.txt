@@ -1,0 +1,531 @@
+================================================================================
+HARDCODED COORDINATES REFERENCE
+Clash Bot — All Screen Positions
+Generated from: Autoclash.py, Autoclash_BB.py, AutomationWorker.py,
+                AutoclashGUI.py, clangamescycler.py, clanscouter.py,
+                capitalraider.py
+================================================================================
+
+NOTE: The following three coordinates appear in both Autoclash_BB.py (as CONFIG
+entries) and AutomationWorker.py (as module-level constants), and are EXCLUDED
+from this list per the task brief:
+  HARD_RESET_CLOSE_COORD      = (1859, 16)
+  HARD_RESET_RELAUNCH_COORD   = (340, 160)
+  HARD_RESET_POST_LAUNCH_COORD = (1517, 148)
+Also excluded: pyautogui.click(1859, 16), pyautogui.doubleClick(340, 160),
+               pyautogui.click(1517, 148) in HomeBattleSession.ensure_approved_account
+
+
+================================================================================
+=== Autoclash.py ===
+================================================================================
+
+--- CONFIG (top-level) ---
+
+"search_region": (289, 36, 1566, 902)
+  → Search region for air defense template matching (Phase 2B)
+
+"clan_games_challenge_region": (622, 180, 1732, 847)
+  → Region to scan for clan games challenge templates
+
+"ten_battle_points": [
+    (490, 768),   # Point 1
+    (403, 694),   # Point 2
+    (188, 530),   # Point 3
+    (241, 442),   # Point 4
+    (421, 312),   # Point 5
+    (583, 188),   # Point 6
+    (748, 74),    # Point 7
+    (1228, 109),  # Point 8
+    (1340, 193),  # Point 9
+    (1477, 304),  # Point 10
+  ]
+  → Dragon/troop deployment click points (Phase 2B)
+
+"abilities_click_coord": (641, 144)
+  → Location clicked while pressing Q/W/E/R hero ability keys
+
+--- CONFIG["phase4"] ---
+
+"more_box": (505, 893, 1288, 958)
+  → Search region for "More" button (wall upgrade UI)
+
+"add_box": (733, 880, 955, 936)
+  → Search region for "Add" button (wall upgrade UI)
+
+"remove_box": (500, 880, 707, 930)
+  → Search region for "Remove" button (wall upgrade UI)
+
+"upgrade_box_gold": (977, 880, 1188, 936)
+  → Search region for gold "Upgrade" button (singular wall)
+
+"upgrade_box_elixir": (1133, 880, 1344, 936)
+  → Search region for elixir "Upgrade" button (singular wall)
+
+"upgrade_box_gold_alt": (977, 891, 1188, 936)
+  → Alternate gold upgrade box (add-loop / Case B)
+
+"upgrade_box_elixir_alt": (1133, 891, 1344, 936)
+  → Alternate elixir upgrade box (add-loop / Case B)
+
+"gold_pixel_set": [
+    (1075, 816), (1057, 816), (1075, 821), (1154, 816), (1155, 821)
+  ]
+  → Pixels sampled to detect gold-storage-full / upgrade trigger
+
+"elixir_pixel_set": [
+    (1233, 816), (1215, 816), (1233, 821), (1312, 816), (1313, 821)
+  ]
+  → Pixels sampled to detect elixir-storage-full / upgrade trigger
+
+"alternate_pixel_set": [
+    (758, 900), (763, 908), (778, 907), (838, 900), (842, 909), (874, 908)
+  ]
+  → Alternate (resource-independent) pixel trigger set for wall upgrade
+
+--- AutoLootTracker (class __init__) ---
+
+self.gold_region = (754, 448, 986, 503)
+  → OCR region for end-of-battle gold amount
+
+self.elixir_region = (754, 521, 986, 577)
+  → OCR region for end-of-battle elixir amount
+
+self.dark_elixir_region = (816, 590, 986, 646)
+  → OCR region for end-of-battle dark elixir amount
+
+self.additional_gold_region = (1252, 539, 1404, 584)
+  → OCR region for bonus/additional gold (star-bonus loot)
+
+self.additional_elixir_region = (1249, 593, 1405, 644)
+  → OCR region for bonus/additional elixir
+
+self.additional_dark_elixir_region = (1283, 648, 1404, 697)
+  → OCR region for bonus/additional dark elixir
+
+self.star_pixels = [(767, 247), (1002, 230), (1144, 279)]
+  → Pixels checked to count battle stars on end screen
+
+--- Module-level constant ---
+
+ACCOUNT_NAME_BOX = (111, 13, 289, 41)
+  → OCR capture region for the in-game account name (top-left)
+
+--- check_gold_full() ---
+
+gold_pixels = [(1605, 67), (1823, 67), (1763, 67), (1732, 67)]
+  → Pixels sampled to detect whether gold storage is full
+
+--- check_elixir_full() ---
+
+elixir_pixels = [(1605, 152), (1823, 152), (1763, 152), (1732, 152)]
+  → Pixels sampled to detect whether elixir storage is full
+
+--- HomeBattleSession.run_clan_games_flow() ---
+
+pyautogui.moveTo(733, 291) / pyautogui.dragTo(1177, 958)
+  → Map drag gesture (×2) before finding Clan Games stand
+
+is_pixel_close_to_yellow((513, 978), ...)
+  → Entry-active indicator pixel check (early exit from CG menu)
+
+clan_games_click(1704, 79, ...)    [multiple occurrences]
+  → Clan Games menu exit / close button click
+
+is_pixel_close_to_yellow((890, 459), ...)
+  → Active-challenge indicator pixel check (exit CG menu if active)
+
+clan_games_click(797, 280, ...)
+  → Fallback: click challenge area when no template found
+
+clan_games_click(1120, 667, ...)
+  → Clan Games challenge confirmation click
+
+pyautogui.moveTo(1177, 513) [scroll for second challenge page]
+  → Scroll centre point for challenge list second page
+
+--- HomeBattleSession.perform_wall_upgrade_flow() ---
+
+click_with_jitter(907, 44)
+  → Open upgrade menu button (Phase 4, new flow)
+
+find_text_in_region("wall", 744, 134, 1210, 684, ...)
+  → OCR region to search for "wall" in upgrade list
+
+pyautogui.moveTo(866, 458) / pyautogui.drag(0, -200)
+  → Drag gesture to scroll upgrade list down when "wall" not found
+
+--- HomeBattleSession.upgrade_account() (Phase 5) ---
+
+search_x1, search_y1, search_x2, search_y2 = 771, 149, 1045, 667
+  → Search region for upgrade list items (Storage / New / Other)
+
+scroll_cx, scroll_cy (derived) = 908, 408  [computed as midpoints of above]
+  → Centre point used to scroll the upgrade list
+
+Autoclash.find_template("nobuilders.png", search_box=(835, 2, 1094, 129))
+  → Region checked for "no builders" icon
+
+click_with_jitter(907, 50)
+  → Open upgrade menu button (Phase 5)
+
+--- HomeBattleSession.phase1_enter_battle() ---
+
+click_with_jitter(1843, 69)
+  → Exit layout editor when detected before battle entry
+
+pyautogui.moveTo(1288, 586) / pyautogui.dragTo(733, 586)
+  → Drag to scroll troop/request panel during request flow
+
+click_with_jitter(1335, 861)
+  → Spell selection confirmation point in request flow
+
+click_with_jitter(1122, 680)
+  → Post-enter-battle confirmation click
+
+--- HomeBattleSession.phase2_prepare() ---
+
+extract_loot_amount(78, 121, 208, 152)
+  → OCR region for loot amount on the battle preview screen
+
+click_with_jitter(955, 658)
+  → Emergency low-gold attack point (attacks immediately)
+
+click_with_jitter(1788, 819)
+  → Skip/next button when loot is below threshold
+
+--- HomeBattleSession.phase2_execute() ---
+
+base_hero_coords = [511, 622, 733, 844]
+  → Base X positions for hero selection icons (y = 991 when clicked)
+  (When event adds a slot, shifted right +111; siege adds another +111)
+
+siege_placement_x = 622 (with event) or 511 (without event)
+  → X coordinate for siege machine selection icon (y = 991)
+
+click_with_jitter(x_coord, 991)   [hero/siege selection loop]
+  → Y=991 is the hero/siege icon bar row
+
+--- HomeBattleSession.phase3_wait_for_return() ---
+
+click_with_jitter(955, 902)
+  → Final click after claiming league reward (post-5-clicks step)
+
+--- HomeBattleSession._perform_wall_upgrade() [DEPRECATED] ---
+
+click_with_jitter(907, 44)
+  → Open upgrade menu (deprecated flow)
+
+find_text_in_region("wall", 744, 134, 1210, 684, ...)
+  → Upgrade list wall search region (deprecated flow)
+
+pyautogui.moveTo(977, 670) / pyautogui.moveTo(977, 430)
+  → Drag to scroll upgrade list (deprecated flow)
+
+click_with_jitter(confirm_click_x, 867)   [confirm_click_x defaults to 1075]
+  → Upgrade confirm button click (deprecated flow)
+
+click_with_jitter(1288, 958)
+  → Final confirmation click (deprecated flow)
+
+
+================================================================================
+=== Autoclash_BB.py ===
+================================================================================
+
+--- Module-level coordinate constants ---
+
+DEPLOY_SEQUENCE = [(16, 319), (542, 694), (998, 380), (124, 408), (775, 560), (1309, 156)]
+  → Six troop deployment click points (first-half battle)
+
+HERO_DEPLOY = [(324, 982), (788, 536)]
+  → Hero icon selection then hero placement point
+
+FIRST_HALF_PIXELS = [(1677, 856), (1719, 856), (1762, 856)]
+  → Pixel positions checked for first-half victory (orange colour)
+
+STAR_PIXELS = [(752, 329), (966, 254), (1182, 343)]
+  → Pixel positions checked for first-half star count (orange)
+
+IN_BATTLE_PIXEL = (479, 931)
+  → Pixel checked for purple colour to confirm battle has started
+
+HERO_ABILITY_PIXEL = (350, 874)
+  → Pixel checked for purple colour to detect hero ability availability
+
+SECOND_HALF_STAR_PIXELS = [(754, 339), (966, 260), (1178, 337)]
+  → Pixel positions checked for second-half blue stars
+
+SECOND_HALF_DRAG_START = (600, 258)
+  → Start point of the second-half deployment drag gesture
+
+SECOND_HALF_DRAG_END = (1044, 724)
+  → End point of the second-half deployment drag gesture
+
+SECOND_HALF_DEPLOY_POINTS = [
+    (787, 858), (877, 791), (983, 724), (1252, 527),
+    (1469, 503), (1548, 563), (1634, 629), (1763, 727)
+  ]
+  → Eight second-half troop deployment points
+
+HERO_ICON_PIXEL = (324, 982)
+  → Hero icon click position for second-half hero deployment
+
+HERO_SECOND_CLICK = (1031, 668)
+  → Hero placement point for second-half
+
+--- BuilderBattleSession.phase2_attack() ---
+
+mouseDown(1122, 891) → moveTo(622, 69)
+  → Initial deployment drag gesture (zoom out / position view)
+
+smooth_click(455, 986)
+  → First click after drag (troop icon or map tap)
+
+smooth_click(324, 982)   [hero ability activation]
+  → Hero icon clicked when ability pixel is purple
+
+pixel_is_close(pil_img, (1684, 819), (224, 224, 224), 20)
+  → Button pixel checked for grey colour (backup-mode trigger)
+
+mouseDown(1089, 112) → moveTo(1012, 363)
+  → End-battle gesture 1 (drag to dismiss screen)
+
+smooth_click(1247, 124)
+  → End-battle gesture 2
+
+smooth_click(1399, 913)
+  → End-battle gesture 3
+
+smooth_click(1621, 102)
+  → End-battle gesture 4
+
+
+================================================================================
+=== AutomationWorker.py ===
+================================================================================
+
+--- Module-level constants ---
+
+SETTINGS_MENU_COORD = (1852, 841)
+  → Settings/gear icon to open account switch menu
+
+ACCOUNT_SWITCH_MENU_COORD = (1245, 244)
+  → "Switch Account" option inside settings menu
+
+ACCOUNT_SWITCH_BOX = (1321, 496, 1917, 1080)
+  → Region of the account list panel (for OCR account matching and scrolling)
+
+--- _ContextMixin._ensure_home_village_context() ---
+
+drag_pairs = [((1288, 513), (289, 624)), ((289, 624), (1288, 513))]
+  → Alternating drag gestures used to pan the village while searching for BB boat
+
+--- _ContextMixin._prepare_builder_base_after_switch() ---
+
+pyautogui.moveTo(777, 752) / pyautogui.dragTo(1011, 291)
+  → Drag to reposition Builder Base view after account switch
+
+Autoclash.click_with_jitter(511, 752)
+  → Click to confirm Builder Base view position
+
+--- UpgradeAccountsWorker._resources_full_no_builder() ---
+
+Autoclash.find_template("nobuilders.png", search_box=(835, 2, 1095, 129))
+  → Slightly wider variant of the no-builders check region
+
+--- _RecoveryMixin._perform_hard_game_restart() ---
+
+pyautogui.click(*HARD_RESET_CLOSE_COORD)      → excluded (see header note)
+pyautogui.doubleClick(*HARD_RESET_RELAUNCH_COORD)  → excluded
+pyautogui.click(*HARD_RESET_POST_LAUNCH_COORD)     → excluded
+
+
+================================================================================
+=== AutoclashGUI.py ===
+================================================================================
+
+No hardcoded game screen coordinates are present in this file.
+All numeric tuples are Qt window/widget size values (e.g. (700, 500))
+and are not screen interaction coordinates.
+
+
+================================================================================
+=== clangamescycler.py ===
+================================================================================
+
+--- Module-level constants ---
+
+GRID_COORDS: List[GridCoord] = [
+    (793, 311),
+    (1047, 311),
+    (1295, 311),
+    (1548, 311),
+    (793, 624),
+    (1047, 624),
+    (1295, 624),
+    (1548, 624),
+  ]
+  → Eight clan games challenge slot centre points (4 per row, 2 rows)
+
+SETTINGS_MENU_COORD = (1852, 841)
+  → Settings/gear icon (same as AutomationWorker constant)
+
+ACCOUNT_SWITCH_MENU_COORD = (1245, 244)
+  → Switch account menu option (same as AutomationWorker constant)
+
+ACCOUNT_SWITCH_BOX = (1321, 496, 1917, 1080)
+  → Account list panel region (same as AutomationWorker constant)
+
+--- is_active_challenge_pixel_yellow() ---
+
+pixel default = (890, 459)
+  → Active-challenge indicator pixel (checked for yellow colour)
+
+--- open_clan_games_stand() ---
+
+pyautogui.moveTo(733, 291) / pyautogui.dragTo(1177, 958)
+  → Map drag ×2 to position the Clan Games stand on screen
+
+click_and_wait(1704, 79, ...)   [cooldown / active-challenge exit]
+  → Clan Games menu close/exit button
+
+is_active_challenge_pixel_yellow((890, 459))  [inline call]
+  → Active-challenge check before exiting CG menu
+
+--- trash_challenge_at_slot() ---
+
+AC.click_with_jitter(1120, 667)
+  → Clan Games challenge trash/confirmation "okay" click
+
+--- run_single_account_cycle() / ClanGamesWorker._run_single_cycle() ---
+
+click_and_wait(1704, 79, ...)   [multiple: menu exit, final exit]
+  → Clan Games menu exit button
+
+--- ClanGamesWorker._run_single_cycle() ---
+
+clangamescycler.click_and_wait(1674, 109, ...)
+  → Slightly different menu-exit coordinate used in ClanGamesWorker variant
+
+
+================================================================================
+=== clanscouter.py ===
+================================================================================
+
+--- Module-level constants ---
+
+CLANS_BOX = (223, 451, 1310, 1036)
+  → Region of the clan search results list (for OCR)
+
+CLANS_BOX_CENTER = (766, 743)
+  → Centre of CLANS_BOX (used as scroll target)
+
+CAPITAL_HALL_REGION = (1044, 542, 1132, 582)
+  → Region to check for Capital Hall level indicator (unused in final code path;
+    template match is used instead)
+
+OPEN_SEARCH_SEQUENCE = [
+    (67, 58),
+    (1166, 80),
+    (955, 213),
+    (1077, 354),
+  ]
+  → 4-click sequence to navigate into the clan search screen
+
+SETTINGS_MENU_COORD = (1852, 841)
+  → Settings/gear icon (same as other files)
+
+ACCOUNT_SWITCH_MENU_COORD = (1245, 244)
+  → Switch account menu option
+
+ACCOUNT_SWITCH_BOX = (1321, 496, 1917, 1080)
+  → Account list panel region
+
+EXIT_CLAN_SEARCH_COORD = (91, 362)
+  → Back button to exit the clan search list
+
+EXIT_CLAN_SCREEN_COORD = (278, 91)
+  → Back/exit button from an individual clan's profile screen
+
+CLAN_STATS_COORD = (300, 569)
+  → Click point to open clan stats/info from a clan listing
+
+--- _open_clan_search() ---
+
+AC.click_with_jitter(final_x - 300, final_y)   [= (777, 354)]
+  → Click search input field (300px left of search button at (1077, 354))
+
+AC.click_with_jitter(222, 634)
+  → Deselect search bar after list loads (so scrolling works)
+
+
+================================================================================
+=== capitalraider.py ===
+================================================================================
+
+--- Module-level constants ---
+
+DISTRICTS = [
+    ("Goblin Mines",       (1217, 1012)),
+    ("Skeleton Park",      ( 870, 1029)),
+    ("Golem Quarry",       ( 552,  983)),
+    ("Dragon Cliffs",      (1286,  791)),
+    ("Builder's Workshop", (1068,  869)),
+    ("Balloon Lagoon",     ( 742,  833)),
+    ("Wizard Valley",      ( 932,  658)),
+    ("Barbarian Camp",     (1146,  586)),
+    ("Capital Peak",       ( 917,  380)),
+  ]
+  → Click coordinates for each Capital district on the raid map
+
+DIAMOND_CX = 639, DIAMOND_CY = 436, DIAMOND_HW = 650, DIAMOND_HH = 467
+  → Diamond deployment zone parameters:
+      Bottom corner: (639, 903)
+      Left corner:   (-11, 436)   [off-screen; zone clips naturally]
+      Top corner:    (639, -27)   [off-screen]
+      Right corner:  (1289, 436)
+
+TROOP_BUTTON = (344, 1000)
+  → Troop selection button in capital battle UI
+
+SPELL_BUTTONS = [(484, 1000), (622, 1000)]
+  → Two spell selection buttons in capital battle UI
+
+DESELECT_COORD = (1621, 624)
+  → Tap here to deselect a district without entering it
+
+DRAG_START = (900, 791)
+  → Start point for navigation/zoom-out drag gesture
+
+DRAG_END = (677, 347)
+  → End point for navigation/zoom-out drag gesture
+
+PROFILE_TAB_COORD = (67, 52)
+  → Profile tab button (for clan-join flow)
+
+SOCIAL_TAB_COORD = (1510, 91)
+  → Social tab inside profile (to find other players)
+
+EXIT_PROFILE_COORD = (67, 358)
+  → Back button to exit a player's profile
+
+--- handle_capital_lobby() ---
+
+Autoclash.click_with_jitter(100, 980)
+  → Back/exit button when "Start Raid" found (no active raid)
+
+--- _join_clan_of() ---
+
+pyautogui.moveTo(874, 593) / pyautogui.scroll(-3)
+  → Scroll down in social tab when looking for reference account
+
+--- return_to_home_village() ---
+
+Autoclash.click_with_jitter(100, 980)   [×2]
+  → Bottom-left back button, clicked twice to return to home village
+
+--- attack_next_district() — search_box for Enter Battle ---
+
+Autoclash.find_template(TPL_CAPITAL_ENTER, search_box=(400, 300, 1700, 750))
+  → Constrained search region for the "Enter Battle" button
