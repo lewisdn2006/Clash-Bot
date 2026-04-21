@@ -184,7 +184,7 @@ def screenshot_cv() -> np.ndarray:
     Returns:
         np.ndarray: BGR image array (height, width, 3)
     """
-    pil_img = pyautogui.screenshot()
+    pil_img = _vision.safe_screenshot()
     # Convert PIL RGB to BGR for OpenCV
     cv_img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
     return cv_img
@@ -193,11 +193,11 @@ def screenshot_cv() -> np.ndarray:
 def screenshot_pil() -> Image.Image:
     """
     Capture screenshot and return as PIL Image for pixel checks.
-    
+
     Returns:
         Image.Image: PIL Image in RGB mode
     """
-    return pyautogui.screenshot()
+    return _vision.safe_screenshot()
 
 
 def add_jitter(x: int, y: int, jitter_px: int = CONFIG["CLICK_JITTER"]) -> Tuple[int, int]:

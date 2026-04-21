@@ -381,7 +381,7 @@ class AutoLootTracker:
 
         try:
             x1, y1, x2, y2 = region
-            screenshot = pyautogui.screenshot(region=(x1, y1, x2 - x1, y2 - y1))
+            screenshot = _vision.safe_screenshot(region=(x1, y1, x2 - x1, y2 - y1))
             screenshot_np = np.array(screenshot)
 
             # Convert to grayscale
@@ -479,7 +479,7 @@ class AutoLootTracker:
         match the target color within tolerance.
         """
         try:
-            screenshot = pyautogui.screenshot()
+            screenshot = _vision.safe_screenshot()
             screenshot_np = np.array(screenshot)
             
             stars_earned = 0
@@ -754,7 +754,7 @@ def _clean_text(text: str) -> str:
 def read_account_name(box: tuple = ACCOUNT_NAME_BOX) -> str:
     """Capture name box and OCR using tesseract (subprocess, same as tesseract_reader)."""
     # Capture region
-    screenshot = pyautogui.screenshot(region=(box[0], box[1], box[2] - box[0], box[3] - box[1]))
+    screenshot = _vision.safe_screenshot(region=(box[0], box[1], box[2] - box[0], box[3] - box[1]))
 
     # Preprocess similar to tesseract_reader
     if screenshot.mode != "L":
@@ -870,7 +870,7 @@ def check_for_error_button() -> bool:
     If found, click it and return True to signal restart from Phase 1.
     Returns False if button not found (normal operation).
     """
-    screenshot = pyautogui.screenshot()
+    screenshot = _vision.safe_screenshot()
     return check_for_error_buttons_in_screenshot(screenshot)
 
 
@@ -952,7 +952,7 @@ def is_in_rejected_region(x: float, y: float, rejected_regions: List[Tuple[float
 
 def _get_region_image(x1: int, y1: int, x2: int, y2: int, screenshot: Optional[Image.Image] = None) -> Image.Image:
     if screenshot is None:
-        return pyautogui.screenshot(region=(x1, y1, x2 - x1, y2 - y1))
+        return _vision.safe_screenshot(region=(x1, y1, x2 - x1, y2 - y1))
     if isinstance(screenshot, np.ndarray):
         region = screenshot[y1:y2, x1:x2]
         return Image.fromarray(region)
@@ -1149,7 +1149,7 @@ def pixel_is_close(x: int, y: int, target_rgb: Tuple[int, int, int], tol: int, s
     """
     try:
         if screenshot_np is None:
-            screenshot = pyautogui.screenshot()
+            screenshot = _vision.safe_screenshot()
             screenshot_np = np.array(screenshot)
         
         # Extract pixel color at (x, y). numpy uses [row, col] = [y, x]
@@ -1317,7 +1317,7 @@ def add_jitter(x: int, y: int) -> Tuple[int, int]:
 def is_resource_full(pixel_coords: List[Tuple[int, int]], color_tolerance: int = 10) -> bool:
     """Check if a resource bar looks full by comparing multiple pixel colors."""
     try:
-        screenshot = pyautogui.screenshot()
+        screenshot = _vision.safe_screenshot()
         screenshot_np = np.array(screenshot)
 
         colors = []
@@ -1348,7 +1348,7 @@ def is_pixel_near_color(
     """Return True if the pixel at (x, y) is within `tolerance` of `target` RGB."""
     try:
         if screenshot_np is None:
-            screenshot_np = np.array(pyautogui.screenshot())
+            screenshot_np = np.array(_vision.safe_screenshot())
         pixel = screenshot_np[y, x].astype(int)
         diff = np.sqrt(np.sum((pixel[:3] - np.array(target, dtype=int)) ** 2))
         log(f"  Pixel at ({x}, {y}): RGB{tuple(pixel[:3])}  target={target}  diff={diff:.2f}")
@@ -1882,7 +1882,7 @@ class HomeBattleSession:
         ) -> bool:
             x, y = pixel
             try:
-                shot = pyautogui.screenshot(region=(x, y, 1, 1))
+                shot = _vision.safe_screenshot(region=(x, y, 1, 1))
                 rgb = shot.getpixel((0, 0))
                 if isinstance(rgb, tuple) and len(rgb) >= 3:
                     r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
@@ -2207,7 +2207,7 @@ class HomeBattleSession:
                 # Check pixel triggers
                 log(f"Phase4:  Checking pixel triggers...")
 
-                screenshot_np = np.array(pyautogui.screenshot())
+                screenshot_np = np.array(_vision.safe_screenshot())
 
                 # Check resource-specific pixels
                 for px, py in target_pixel_set:
@@ -3335,7 +3335,7 @@ class HomeBattleSession:
             battle_loaded = False
             surrender_button_found = False
             for attempt in range(1, CONFIG["max_search_attempts"] + 1):
-                screenshot = pyautogui.screenshot()
+                screenshot = _vision.safe_screenshot()
                 if check_for_error_buttons_in_screenshot(screenshot):
                     return False
                 end_coords = find_template(CONFIG["end_button"], screenshot=screenshot)
@@ -3727,7 +3727,7 @@ class HomeBattleSession:
             attempt += 1
 
             # Check for return/claim reward buttons using a single screenshot
-            screenshot = pyautogui.screenshot()
+            screenshot = _vision.safe_screenshot()
             if check_for_error_buttons_in_screenshot(screenshot):
                 return False
             return_coords = find_template(CONFIG["return_button"], screenshot=screenshot)

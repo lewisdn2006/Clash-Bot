@@ -34,6 +34,7 @@ from typing import Callable, Dict, List, Optional, Set, Tuple
 import pyautogui
 
 import Autoclash as AC
+import vision as _vision
 import clangamescycler as CGC
 
 # ---------------------------------------------------------------------------
@@ -86,7 +87,7 @@ def _is_completion_pixel_yellow() -> bool:
     """Return True if pixel (513, 978) is close to yellow (~7000 pts)."""
     x, y = COMPLETION_PIXEL
     try:
-        shot = pyautogui.screenshot(region=(x, y, 1, 1))
+        shot = _vision.safe_screenshot(region=(x, y, 1, 1))
         rgb = shot.getpixel((0, 0))
         if isinstance(rgb, tuple) and len(rgb) >= 3:
             r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])

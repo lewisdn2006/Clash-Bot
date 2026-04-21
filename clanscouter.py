@@ -28,6 +28,7 @@ import numpy as np
 import pyautogui
 
 import Autoclash as AC
+import vision as _vision
 
 try:
     import tkinter as tk
@@ -202,7 +203,7 @@ def _ocr_region(region: Tuple[int, int, int, int]) -> List[Dict]:
     """Screenshot a screen region, run Tesseract OCR, return word records."""
     x1, y1, x2, y2 = region
     w, h = x2 - x1, y2 - y1
-    screenshot = pyautogui.screenshot(region=(x1, y1, w, h))
+    screenshot = _vision.safe_screenshot(region=(x1, y1, w, h))
     processed = _preprocess_for_ocr(screenshot)
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:

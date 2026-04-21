@@ -55,10 +55,12 @@ from Autoclash import (
 )
 import Autoclash
 import Autoclash_BB
+import vision as _vision
 import clangamescycler
 import clangamesmaster
 import clanscouter
 import capitalraider
+import bot_reporter
 
 # ---------------------------------------------------------------------------
 # Vision overlay patch
@@ -186,7 +188,7 @@ def _preprocess_for_ocr(pil_image) -> np.ndarray:
 def _ocr_tsv_records_in_region(region: Tuple[int, int, int, int]) -> list:
     x1, y1, x2, y2 = region
     width, height = x2 - x1, y2 - y1
-    screenshot = pyautogui.screenshot(region=(x1, y1, width, height))
+    screenshot = _vision.safe_screenshot(region=(x1, y1, width, height))
     processed = _preprocess_for_ocr(screenshot)
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
@@ -662,7 +664,10 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
     # noinspection PyUnresolvedReferences
     def run(self):  # noqa: C901
         try:
+            bot_reporter.start()
             self.status_update.emit("Initializing", "Starting automation...")
+            bot_reporter.update_phase("Initializing", "Starting automation...")
+            bot_reporter.log("Home Village automation started")
             self.overlay_draw.emit([], "Home Village — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
@@ -670,6 +675,7 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
             num_runs = CONFIG.get("num_runs")
             infinite_mode = num_runs is None or num_runs <= 0
             run_count = 0
+            total_upgrades = 0
 
             while not self._stop_requested:
                 self.overlay_draw.emit([], "Home Village — Checking village context")
@@ -683,11 +689,13 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
 
                 self.overlay_draw.emit([], "Home Village — Detecting account")
                 self.status_update.emit("Account", "Detecting active account...")
+                bot_reporter.update_phase("Account", "Detecting active account...")
                 if not ensure_approved_account():
                     if self._stop_requested:
                         break
                     self._handle_repeated_failure("home.account.detect", action_label="Account")
                     self.status_update.emit("Account", "Failed to detect approved account")
+                    bot_reporter.update_phase("Account", "Failed to detect approved account")
                     time.sleep(2)
                     continue
 
@@ -695,19 +703,24 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
                 if not detected:
                     self._handle_repeated_failure("home.account.empty", action_label="Account")
                     self.status_update.emit("Account", "Detected account name is empty")
+                    bot_reporter.update_phase("Account", "Detected account name is empty")
                     time.sleep(2)
                     continue
 
                 self.account_detected.emit(detected)
+                bot_reporter.update_account(detected)
                 settings = self._get_account_settings(detected)
                 self._apply_settings(settings)
                 self.status_update.emit("Account", f"Using '{detected}' settings")
+                bot_reporter.update_phase("Account", f"Using '{detected}' settings")
+                bot_reporter.log(f"Account active: {detected}")
 
                 run_count += 1
                 if not infinite_mode and run_count > num_runs:
                     break
 
                 self.status_update.emit(f"Battle {run_count}", f"Starting battle {run_count}...")
+                bot_reporter.update_phase(f"Battle {run_count}", f"Starting battle {run_count}...")
 
                 try:
                     battle_start = time.time()
@@ -716,6 +729,7 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
                     # Phase 1
                     self.overlay_draw.emit([], f"Home Village — Battle {run_count}: Entering battle")
                     self.status_update.emit("Phase 1", "Entering battle...")
+                    bot_reporter.update_phase("Phase 1", "Entering battle...")
                     if not phase1_enter_battle(skip_account_check=False):
                         if self._stop_requested:
                             break
@@ -727,13 +741,16 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
                     confirmed = normalize_account_name(Autoclash._default_session.current_account_name or "")
                     if confirmed:
                         self.account_detected.emit(confirmed)
+                        bot_reporter.update_account(confirmed)
                         confirmed_settings = self._get_account_settings(confirmed)
                         self._apply_settings(confirmed_settings)
                         self.status_update.emit("Account", f"Using '{confirmed}' settings")
+                        bot_reporter.update_phase("Account", f"Using '{confirmed}' settings")
 
                     # Phase 2A
                     self.overlay_draw.emit([], f"Home Village — Battle {run_count}: Preparing")
                     self.status_update.emit("Phase 2A", "Preparing battle...")
+                    bot_reporter.update_phase("Phase 2A", "Preparing battle...")
                     if not phase2_prepare():
                         if self._stop_requested:
                             break
@@ -744,6 +761,7 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
                     # Phase 2B
                     self.overlay_draw.emit([], f"Home Village — Battle {run_count}: Deploying troops")
                     self.status_update.emit("Phase 2B", "Deploying troops...")
+                    bot_reporter.update_phase("Phase 2B", "Deploying troops...")
                     if not phase2_execute():
                         if self._stop_requested:
                             break
@@ -754,6 +772,7 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
                     # Phase 3
                     self.overlay_draw.emit([], f"Home Village — Battle {run_count}: Waiting for return")
                     self.status_update.emit("Phase 3", "Waiting for battle to end...")
+                    bot_reporter.update_phase("Phase 3", "Waiting for battle to end...")
                     if not phase3_wait_for_return():
                         if self._stop_requested:
                             break
@@ -763,21 +782,38 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
 
                     # Phase 4
                     self.status_update.emit("Loading", "Waiting for Phase 4 to load...")
+                    bot_reporter.update_phase("Loading", "Waiting for Phase 4 to load...")
                     time.sleep(5)
 
                     if CONFIG.get("auto_upgrade_walls", True):
                         self.overlay_draw.emit([], f"Home Village — Battle {run_count}: Upgrading walls")
                         self.status_update.emit("Phase 4", "Upgrading walls...")
+                        bot_reporter.update_phase("Phase 4", "Upgrading walls...")
                         phase4_upgrade()
+                        _walls = Autoclash._default_session.walls_upgraded_this_battle
+                        if _walls:
+                            total_upgrades += _walls
+                            bot_reporter.report_upgrade(
+                                Autoclash._default_session.current_account_name or detected,
+                                "walls", total_upgrades,
+                            )
                     else:
                         self.status_update.emit("Phase 4", "Phase 4 skipped (auto upgrade disabled)")
+                        bot_reporter.update_phase("Phase 4", "Phase 4 skipped (auto upgrade disabled)")
 
                     if CONFIG.get("auto_upgrade_storages", True):
                         self.overlay_draw.emit([], f"Home Village — Battle {run_count}: Upgrading account")
                         self.status_update.emit("Phase 5", "Upgrading account...")
+                        bot_reporter.update_phase("Phase 5", "Upgrading account...")
                         upgrade_account()
+                        total_upgrades += 1
+                        bot_reporter.report_upgrade(
+                            Autoclash._default_session.current_account_name or detected,
+                            "account upgrade", total_upgrades,
+                        )
                     else:
                         self.status_update.emit("Phase 5", "Phase 5 skipped (auto upgrade storages disabled)")
+                        bot_reporter.update_phase("Phase 5", "Phase 5 skipped (auto upgrade storages disabled)")
 
                     disabled_acct = pop_gem_upgrades_disabled()
                     if disabled_acct:
@@ -793,6 +829,10 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
                             update_account_stats(account_name, snapshot, battle_duration, walls)
                             self.battle_completed.emit(account_name, snapshot, battle_duration, walls)
                             log(f"[OK] Stats saved for '{account_name}' (+{walls} walls)")
+                            _gold = snapshot.get("gold", 0) if isinstance(snapshot, dict) else 0
+                            _elixir = snapshot.get("elixir", 0) if isinstance(snapshot, dict) else 0
+                            _dark = snapshot.get("dark_elixir", snapshot.get("dark", 0)) if isinstance(snapshot, dict) else 0
+                            bot_reporter.report_battle_complete(account_name, _gold, _elixir, _dark, run_count)
                         except Exception as e:
                             log(f"[ERROR] saving stats: {e}")
                     else:
@@ -804,11 +844,13 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
                     self._reset_failure_watchdog()
                     self.overlay_draw.emit([], f"Home Village — Battle {run_count} complete")
                     self.status_update.emit("Idle", f"Battle {run_count} completed!")
+                    bot_reporter.update_phase("Idle", f"Battle {run_count} completed!")
                     time.sleep(2.0)
 
                 except Exception as e:
                     log(f"ERROR in battle {run_count}: {e}")
                     self.status_update.emit("Error", f"Error in battle {run_count}: {e}")
+                    bot_reporter.report_error(f"Error in battle {run_count}: {e}")
                     if self._stop_requested:
                         break
                     self._handle_repeated_failure("home.battle.exception", action_label="Error")
@@ -818,15 +860,19 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
 
             if self._stop_requested:
                 self.status_update.emit("Stopped", "Automation stopped by user")
+                bot_reporter.update_phase("Stopped", "Automation stopped by user")
             else:
                 self.status_update.emit("Complete", "Automation completed!")
+                bot_reporter.update_phase("Complete", "Automation completed!")
 
         except Exception as e:
             log(f"FATAL ERROR in home automation thread: {e}")
             self.error_occurred.emit(str(e))
+            bot_reporter.report_error(f"FATAL: {e}")
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
+            bot_reporter.stop()
             self.finished.emit()
 
 

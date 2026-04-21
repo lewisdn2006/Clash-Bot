@@ -17,6 +17,7 @@ import numpy as np
 
 import Autoclash
 import clanscouter as _CS
+import vision as _vision
 
 # ---------------------------------------------------------------------------
 # Configuration constants
@@ -141,7 +142,7 @@ def is_button_depleted(button_xy: Tuple[int, int]) -> bool:
     saturation (max - min channel) is below GREY_SAT_THRESHOLD.
     """
     try:
-        screenshot = pyautogui.screenshot()
+        screenshot = _vision.safe_screenshot()
         px = screenshot.getpixel(button_xy)
         r, g, b = px[0], px[1], px[2]
         saturation = max(r, g, b) - min(r, g, b)

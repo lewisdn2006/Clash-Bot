@@ -13,10 +13,34 @@ Callers are responsible for logging and acting on results.
 import cv2
 import numpy as np
 import pyautogui
+import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Optional, Tuple, List, Union
 
 from PIL import Image
+
+
+def safe_screenshot(region=None) -> Image.Image:
+    """Take a screenshot with retry logic. Retries up to 10 times with 5s delays.
+    If all attempts fail, kills all running Python processes and exits.
+    """
+    max_attempts = 10
+    for attempt in range(1, max_attempts + 1):
+        try:
+            if region is not None:
+                return pyautogui.screenshot(region=region)
+            return pyautogui.screenshot()
+        except Exception as exc:
+            print(f"[safe_screenshot] Attempt {attempt}/{max_attempts} failed: {exc}")
+            if attempt < max_attempts:
+                print(f"[safe_screenshot] Retrying in 5 seconds...")
+                time.sleep(5)
+    print("[safe_screenshot] All 10 attempts failed. Shutting down all Python processes.")
+    subprocess.run(["taskkill", "/F", "/IM", "python.exe"], capture_output=True)
+    subprocess.run(["taskkill", "/F", "/IM", "pythonw.exe"], capture_output=True)
+    sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +104,7 @@ def prepare_screenshot_gray(
     if region is not None:
         x1, y1, x2, y2 = region
         if screenshot is None:
-            screenshot = pyautogui.screenshot(region=(x1, y1, x2 - x1, y2 - y1))
+            screenshot = safe_screenshot(region=(x1, y1, x2 - x1, y2 - y1))
             is_pil = True
         elif is_pil:
             screenshot = screenshot.crop((x1, y1, x2, y2))
@@ -88,7 +112,7 @@ def prepare_screenshot_gray(
             screenshot = screenshot[y1:y2, x1:x2]
         offset_x, offset_y = x1, y1
     elif screenshot is None:
-        screenshot = pyautogui.screenshot()
+        screenshot = safe_screenshot()
         is_pil = True
 
     arr = np.array(screenshot) if is_pil else screenshot

@@ -34,6 +34,7 @@ import numpy as np
 import pyautogui
 
 import Autoclash as AC
+import vision as _vision
 
 try:
     import tkinter as tk
@@ -236,7 +237,7 @@ def _preprocess_for_ocr(pil_image) -> np.ndarray:
 def _ocr_tsv_records_in_region(region: Tuple[int, int, int, int]) -> List[Dict[str, object]]:
     x1, y1, x2, y2 = region
     width, height = x2 - x1, y2 - y1
-    screenshot = pyautogui.screenshot(region=(x1, y1, width, height))
+    screenshot = _vision.safe_screenshot(region=(x1, y1, width, height))
     processed = _preprocess_for_ocr(screenshot)
 
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
@@ -666,10 +667,10 @@ def detect_template_bbox(
 
     if search_region is not None:
         x1, y1, x2, y2 = search_region
-        screenshot = pyautogui.screenshot(region=(x1, y1, x2 - x1, y2 - y1))
+        screenshot = _vision.safe_screenshot(region=(x1, y1, x2 - x1, y2 - y1))
         offset_x, offset_y = x1, y1
     else:
-        screenshot = pyautogui.screenshot()
+        screenshot = _vision.safe_screenshot()
         offset_x, offset_y = 0, 0
 
     screenshot_np = np.array(screenshot)
@@ -709,10 +710,10 @@ def detect_template_bboxes(
 
     if search_region is not None:
         x1, y1, x2, y2 = search_region
-        screenshot = pyautogui.screenshot(region=(x1, y1, x2 - x1, y2 - y1))
+        screenshot = _vision.safe_screenshot(region=(x1, y1, x2 - x1, y2 - y1))
         offset_x, offset_y = x1, y1
     else:
-        screenshot = pyautogui.screenshot()
+        screenshot = _vision.safe_screenshot()
         offset_x, offset_y = 0, 0
 
     screenshot_np = np.array(screenshot)
@@ -860,7 +861,7 @@ def is_active_challenge_pixel_yellow(
     """Return True when the active-challenge indicator pixel is close to yellow."""
     x, y = pixel
     try:
-        shot = pyautogui.screenshot(region=(x, y, 1, 1))
+        shot = _vision.safe_screenshot(region=(x, y, 1, 1))
         rgb = shot.getpixel((0, 0))
         if isinstance(rgb, tuple) and len(rgb) >= 3:
             r, g, b = int(rgb[0]), int(rgb[1]), int(rgb[2])
