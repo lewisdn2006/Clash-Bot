@@ -305,8 +305,8 @@ def _match_visible_switch_accounts(candidates: Dict[str, str]) -> dict:
             if target_norm in row_norm or fragment_match:
                 conf = _normalize_ocr_confidence(float(row["conf"]))
                 log(f"SwitchOCR: '{row['text']}' matched '{switch_name}' conf={conf:.2f}")
-                if conf < 0.85:
-                    log(f"SwitchOCR: rejected — conf {conf:.2f} < 0.85")
+                if conf < 0.70:
+                    log(f"SwitchOCR: rejected — conf {conf:.2f} < 0.70")
                     continue
                 if conf > best_score:
                     best_row = row
