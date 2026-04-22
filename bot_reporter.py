@@ -44,6 +44,7 @@ _session_data: dict = {
 _running:       bool = False
 _thread:        threading.Thread | None = None
 _kv_limit_hit:  bool = False   # safety net — shouldn't fire with D1
+_account_totals: dict = {}  # {account_name: {gold, elixir, dark, attacks}}
 
 
 def _send(payload: dict) -> None:
@@ -119,12 +120,13 @@ def _flush_worker() -> None:
 
 def start() -> None:
     """Start the reporter. Call once when the bot starts."""
-    global _running, _thread, _kv_limit_hit, _session_id
+    global _running, _thread, _kv_limit_hit, _session_id, _account_totals
     if _running:
         return
-    _kv_limit_hit = False
-    _session_id   = str(uuid.uuid4())[:16]   # short unique session ID
-    _running      = True
+    _kv_limit_hit   = False
+    _session_id     = str(uuid.uuid4())[:16]   # short unique session ID
+    _account_totals = {}
+    _running        = True
 
     # Signal session reset to the worker
     _send({"reset_session": True, "version": VERSION})
@@ -188,13 +190,17 @@ def report_battle_complete(
     Sends both the running account totals (for the live table)
     AND a 'battle' object (for D1 history storage).
     """
+    acc = _account_totals.setdefault(account_name, {'gold': 0, 'elixir': 0, 'dark': 0, 'attacks': 0})
+    acc['gold']    += gold
+    acc['elixir']  += elixir
+    acc['dark']    += dark
+    acc['attacks']  = total_attacks  # total_attacks is already cumulative from the caller
     update_account_stats(
         account_name=account_name,
-        attacks=total_attacks,
-        gold=gold,
-        elixir=elixir,
-        dark=dark,
-        upgrades=None,
+        attacks=acc['attacks'],
+        gold=acc['gold'],
+        elixir=acc['elixir'],
+        dark=acc['dark'],
     )
     # Queue individual battle record for D1 history
     _queue.put({
