@@ -1,84 +1,86 @@
 """
-bot_reporter.py — Autoclash Monitor Status Reporter
-====================================================
-Drop this file into your Clash Bot folder.
-Import it in AutomationWorker.py and call the functions below
-to send live status updates to your dashboard at lewisdn.com.
-
-Setup:
-  1. Set WORKER_URL to your Cloudflare Worker URL
-  2. Set BOT_SECRET to match the secret in your worker.js
-  3. Import and call the functions from AutomationWorker.py
+bot_reporter.py — Autoclash Monitor Status Reporter (D1 edition)
+================================================================
+Updated to work with the D1-backed Cloudflare Worker.
+Key changes from KV edition:
+  - FLUSH_INTERVAL reduced to 10 seconds (D1 handles the load)
+  - session_id added so the worker can track separate sessions
+  - report_battle_complete() now sends a 'battle' object for history storage
+  - KV write-limit guard retained (as a safety net, though D1 won't hit it)
 """
 
 import threading
 import queue
 import time
+import uuid
 import requests
-from datetime import datetime
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
-WORKER_URL = "https://autoclash-monitor.lewisdn2006.workers.dev/update"
-BOT_SECRET = "clash-monitor-lewis123"   # must match worker.js
-VERSION = "1.0"
-
-# How often to flush the queue and send updates (seconds)
-FLUSH_INTERVAL = 90
+WORKER_URL  = "https://autoclash-monitor.lewisdn2006.workers.dev/update"
+BOT_SECRET  = "clash-monitor-lewis123"
+VERSION     = "2.0"
+FLUSH_INTERVAL = 10   # seconds — safe with D1 (100k writes/day free)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_queue = queue.Queue()
-_lock = threading.Lock()
-_session_data = {
-    "phase": "—",
-    "message": "—",
+# Unique ID for this bot session (reset each time start() is called)
+_session_id: str = ""
+
+_queue: queue.Queue = queue.Queue()
+_lock  = threading.Lock()
+
+_session_data: dict = {
+    "phase":           "—",
+    "message":         "—",
     "current_account": None,
-    "account_attacks": 0,
-    "account_gold": 0,
-    "account_elixir": 0,
-    "account_dark": 0,
+    "account_attacks":  0,
+    "account_gold":     0,
+    "account_elixir":   0,
+    "account_dark":     0,
     "account_upgrades": 0,
-    "log_message": None,
-    "version": VERSION,
+    "log_message":     None,
+    "version":         VERSION,
 }
 
-_running = False
-_thread = None
-_kv_limit_hit = False
+_running:       bool = False
+_thread:        threading.Thread | None = None
+_kv_limit_hit:  bool = False   # safety net — shouldn't fire with D1
 
 
-def _send(payload: dict):
-    """Send a single payload to the Cloudflare Worker."""
+def _send(payload: dict) -> None:
+    """POST a single payload to the Cloudflare Worker."""
     global _kv_limit_hit
     if _kv_limit_hit:
         return
     try:
+        payload["session_id"] = _session_id
         resp = requests.post(
             WORKER_URL,
             json=payload,
             headers={
-                "Content-Type": "application/json",
-                "X-Bot-Secret": BOT_SECRET,
+                "Content-Type":  "application/json",
+                "X-Bot-Secret":  BOT_SECRET,
             },
             timeout=8,
         )
         if resp.status_code == 400 and "KV put() limit exceeded" in resp.text:
             _kv_limit_hit = True
             print(
-                "[Reporter] ⚠ Cloudflare KV daily write limit reached — "
-                "dashboard reporting disabled until midnight. Bot continues running normally."
+                "[Reporter] ⚠ Daily write limit reached — "
+                "dashboard reporting disabled until midnight. Bot continues normally."
             )
             return
         if resp.status_code != 200:
-            print(f"[Reporter] Worker returned {resp.status_code}: {resp.text[:100]}")
-    except Exception as e:
-        print(f"[Reporter] Failed to send update: {e}")
+            print(f"[Reporter] Worker returned {resp.status_code}: {resp.text[:120]}")
+    except Exception as exc:
+        print(f"[Reporter] Failed to send update: {exc}")
 
 
-def _flush_worker():
-    """Background thread — flushes status every FLUSH_INTERVAL seconds."""
+def _flush_worker() -> None:
+    """Background thread — flushes the queue every FLUSH_INTERVAL seconds."""
     global _running
-    last_flush = 0
-    pending_log = None
+    last_flush: float = 0.0
+    pending_log: str | None = None
+    pending_battle: dict | None = None
 
     while _running:
         # Drain the queue
@@ -87,107 +89,138 @@ def _flush_worker():
                 item = _queue.get_nowait()
                 if item.get("log_message"):
                     pending_log = item["log_message"]
+                if item.get("battle"):
+                    pending_battle = item["battle"]
                 with _lock:
-                    _session_data.update({k: v for k, v in item.items() if v is not None})
+                    _session_data.update(
+                        {k: v for k, v in item.items()
+                         if v is not None and k not in ("log_message", "battle")}
+                    )
         except queue.Empty:
             pass
 
         now = time.time()
-        if now - last_flush >= FLUSH_INTERVAL:
-            if not _kv_limit_hit:
-                with _lock:
-                    payload = dict(_session_data)
-                if pending_log:
-                    payload["log_message"] = pending_log
-                    pending_log = None
-                _send(payload)
+        if now - last_flush >= FLUSH_INTERVAL and not _kv_limit_hit:
+            with _lock:
+                payload = dict(_session_data)
+            if pending_log:
+                payload["log_message"] = pending_log
+                pending_log = None
+            if pending_battle:
+                payload["battle"] = pending_battle
+                pending_battle = None
+            _send(payload)
             last_flush = now
 
         time.sleep(1)
 
 
-def start():
-    """Start the background reporter thread. Call once when bot starts."""
-    global _running, _thread, _kv_limit_hit
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def start() -> None:
+    """Start the reporter. Call once when the bot starts."""
+    global _running, _thread, _kv_limit_hit, _session_id
     if _running:
         return
     _kv_limit_hit = False
-    _running = True
-    # Signal a session reset to clear old data on the dashboard
+    _session_id   = str(uuid.uuid4())[:16]   # short unique session ID
+    _running      = True
+
+    # Signal session reset to the worker
     _send({"reset_session": True, "version": VERSION})
+
     _thread = threading.Thread(target=_flush_worker, daemon=True)
     _thread.start()
-    print("[Reporter] Status reporter started.")
+    print(f"[Reporter] Started — session {_session_id}")
 
 
-def stop():
-    """Stop the reporter thread. Call when bot stops."""
+def stop() -> None:
+    """Stop the reporter. Call when the bot stops."""
     global _running
     _running = False
-    print("[Reporter] Status reporter stopped.")
+    print("[Reporter] Stopped.")
 
 
-def update_phase(phase: str, message: str = ""):
+def update_phase(phase: str, message: str = "") -> None:
     """Call whenever the bot changes phase."""
     _queue.put({"phase": phase, "message": message})
 
 
-def update_account(account_name: str):
+def update_account(account_name: str) -> None:
     """Call whenever the active account changes."""
     _queue.put({"current_account": account_name})
 
 
 def update_account_stats(
     account_name: str,
-    attacks: int = None,
-    gold: int = None,
-    elixir: int = None,
-    dark: int = None,
-    upgrades: int = None,
-):
+    attacks:  int | None = None,
+    gold:     int | None = None,
+    elixir:   int | None = None,
+    dark:     int | None = None,
+    upgrades: int | None = None,
+) -> None:
     """Call after each battle or upgrade with the account's running totals."""
-    payload = {"current_account": account_name}
-    if attacks is not None:
-        payload["account_attacks"] = attacks
-    if gold is not None:
-        payload["account_gold"] = gold
-    if elixir is not None:
-        payload["account_elixir"] = elixir
-    if dark is not None:
-        payload["account_dark"] = dark
-    if upgrades is not None:
-        payload["account_upgrades"] = upgrades
+    payload: dict = {"current_account": account_name}
+    if attacks  is not None: payload["account_attacks"]  = attacks
+    if gold     is not None: payload["account_gold"]     = gold
+    if elixir   is not None: payload["account_elixir"]   = elixir
+    if dark     is not None: payload["account_dark"]     = dark
+    if upgrades is not None: payload["account_upgrades"] = upgrades
     _queue.put(payload)
 
 
-def log(message: str):
-    """
-    Mirror important log messages to the dashboard.
-    Don't call this for every single log line — just key events.
-    The bot's existing log() function is separate; call this selectively.
-    """
+def log(message: str) -> None:
+    """Send a key log message to the dashboard (don't call for every line)."""
     _queue.put({"log_message": message})
 
 
-def report_battle_complete(account_name: str, gold: int, elixir: int, dark: int, total_attacks: int):
-    """Convenience function — call at the end of each battle."""
+def report_battle_complete(
+    account_name: str,
+    gold:         int,
+    elixir:       int,
+    dark:         int,
+    total_attacks: int,
+    walls:        int = 0,
+    stars:        int = 0,
+) -> None:
+    """
+    Call at the end of each battle.
+    Sends both the running account totals (for the live table)
+    AND a 'battle' object (for D1 history storage).
+    """
     update_account_stats(
         account_name=account_name,
         attacks=total_attacks,
         gold=gold,
         elixir=elixir,
         dark=dark,
+        upgrades=None,
     )
-    log(f"Battle complete — {account_name} | G:{gold:,} E:{elixir:,} D:{dark}")
+    # Queue individual battle record for D1 history
+    _queue.put({
+        "battle": {
+            "account":     account_name,
+            "gold":        gold,
+            "elixir":      elixir,
+            "dark_elixir": dark,
+            "walls":       walls,
+            "stars":       stars,
+        }
+    })
+    log(f"Battle — {account_name} | G:{gold:,} E:{elixir:,} D:{dark} {stars}★")
 
 
-def report_upgrade(account_name: str, upgrade_type: str, total_upgrades: int):
-    """Convenience function — call after each upgrade."""
+def report_upgrade(
+    account_name:   str,
+    upgrade_type:   str,
+    total_upgrades: int,
+) -> None:
+    """Call after each upgrade."""
     update_account_stats(account_name=account_name, upgrades=total_upgrades)
     log(f"Upgrade: {upgrade_type} — {account_name} (total: {total_upgrades})")
 
 
-def report_error(message: str):
-    """Call when an error occurs so it shows in red on the dashboard."""
+def report_error(message: str) -> None:
+    """Call when an error occurs — shows in red on the dashboard."""
     update_phase("ERROR", message)
     log(f"ERROR: {message}")
