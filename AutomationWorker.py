@@ -327,6 +327,23 @@ def _match_visible_switch_accounts(candidates: Dict[str, str]) -> dict:
     return visible
 
 
+def _ensure_settings_visible(hard_reset_fn=None) -> bool:
+    """Confirm settings.png is on screen before opening the switch menu.
+    Retries up to 10 times with a 5-second pause between attempts.
+    Calls hard_reset_fn (if provided) and returns False after all retries fail.
+    """
+    max_attempts = 10
+    for attempt in range(1, max_attempts + 1):
+        if Autoclash.find_template("settings.png"):
+            return True
+        log(f"SwitchAcct: settings.png not found (attempt {attempt}/{max_attempts}) — waiting 5s")
+        _worker_pauseable_sleep(5.0)
+    log("SwitchAcct: settings.png not found after 10 attempts — triggering hard reset")
+    if hard_reset_fn is not None:
+        hard_reset_fn()
+    return False
+
+
 def _open_account_switch_menu():
     Autoclash.click_with_jitter(*SETTINGS_MENU_COORD)
     Autoclash.random_delay()
@@ -405,8 +422,11 @@ def _ensure_approved_account_with_return_home(max_attempts: int = 100, stop_fn=N
     return None
 
 
-def _switch_to_target_fill_account(candidate_accounts: List[str]) -> Optional[str]:
+def _switch_to_target_fill_account(candidate_accounts: List[str], hard_reset_fn=None) -> Optional[str]:
     if not candidate_accounts:
+        return None
+
+    if not _ensure_settings_visible(hard_reset_fn):
         return None
 
     candidate_map = {
@@ -1014,7 +1034,7 @@ class FillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 self.fill_progress.emit(len(self.completed_accounts), len(self.selected_accounts))
 
                 self.overlay_draw.emit([], "Fill Accounts — Switching account")
-                target = _switch_to_target_fill_account(remaining)
+                target = _switch_to_target_fill_account(remaining, hard_reset_fn=self._perform_hard_game_restart)
                 if not target:
                     if self._stop_requested:
                         break
@@ -1265,7 +1285,7 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 self.status_update.emit("Switch", f"Switching to account '{target}'...")
                 bot_reporter.update_phase("Switch", f"Switching to account '{target}'...")
                 bot_reporter.log(f"Switching to account: {target}")
-                switched = _switch_to_target_fill_account([target])
+                switched = _switch_to_target_fill_account([target], hard_reset_fn=self._perform_hard_game_restart)
                 if not switched:
                     if self._stop_requested:
                         break
@@ -1504,7 +1524,7 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 self.fill_progress.emit(len(self.completed_accounts), len(self.selected_accounts))
 
                 self.overlay_draw.emit([], "BB Fill Accounts — Switching account")
-                target = _switch_to_target_fill_account(remaining)
+                target = _switch_to_target_fill_account(remaining, hard_reset_fn=self._perform_hard_game_restart)
                 if not target:
                     if self._bb_stopped():
                         break
@@ -2049,7 +2069,7 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
                     if self._stop_requested:
                         break
                     _status("Switching", f"Switching to '{account}' (attempt {attempt}/3)…")
-                    switched = _switch_to_target_fill_account([account])
+                    switched = _switch_to_target_fill_account([account], hard_reset_fn=self._perform_hard_game_restart)
                     if switched:
                         break
                     if attempt < 3:
@@ -2349,7 +2369,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
 
                 self.overlay_draw.emit([], f"Upgrade Accounts — Switching to '{target}'")
                 self.status_update.emit("Switch", f"Switching to account '{target}'...")
-                switched = _switch_to_target_fill_account([target])
+                switched = _switch_to_target_fill_account([target], hard_reset_fn=self._perform_hard_game_restart)
                 if not switched:
                     if self._stop_requested:
                         break
