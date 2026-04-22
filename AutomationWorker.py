@@ -166,6 +166,18 @@ def normalize_account_name(name: str) -> str:
     return (name or "").strip().lower()
 
 
+def _worker_pauseable_sleep(seconds: float) -> None:
+    """Sleep for `seconds` honouring pause/stop on the default session every 0.1 s."""
+    sess = Autoclash._default_session
+    iters = max(1, int(seconds * 10))
+    for _ in range(iters):
+        if sess.stop_requested:
+            break
+        if sess.pause_requested:
+            Autoclash.check_pause(sess)
+        time.sleep(0.1)
+
+
 def _normalize_text_for_ocr(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]", "", value or "").strip().lower()
 
@@ -318,10 +330,10 @@ def _match_visible_switch_accounts(candidates: Dict[str, str]) -> dict:
 def _open_account_switch_menu():
     Autoclash.click_with_jitter(*SETTINGS_MENU_COORD)
     Autoclash.random_delay()
-    time.sleep(1.0)
+    _worker_pauseable_sleep(1.0)
     Autoclash.click_with_jitter(*ACCOUNT_SWITCH_MENU_COORD)
     Autoclash.random_delay()
-    time.sleep(1.0)
+    _worker_pauseable_sleep(1.0)
 
 
 def _scroll_switch_box_once(direction: str = "down"):
@@ -334,7 +346,7 @@ def _scroll_switch_box_once(direction: str = "down"):
         Autoclash._send_wheel(-delta if direction == "down" else delta)
     except Exception:
         pyautogui.scroll(-delta if direction == "down" else delta)
-    time.sleep(0.5)
+    _worker_pauseable_sleep(0.5)
 
 
 def _click_account_load_okay_if_present() -> bool:
@@ -346,7 +358,7 @@ def _click_account_load_okay_if_present() -> bool:
             Autoclash.random_delay()
             return True
         if attempt < 5:
-            time.sleep(1.0)
+            _worker_pauseable_sleep(1.0)
     return False
 
 
@@ -381,14 +393,14 @@ def _ensure_approved_account_with_return_home(max_attempts: int = 100, stop_fn=N
                 if home_coords:
                     Autoclash.click_with_jitter(*home_coords)
                     Autoclash.random_delay()
-                    time.sleep(1.0)
+                    _worker_pauseable_sleep(1.0)
                     break
-                time.sleep(1.0)
+                _worker_pauseable_sleep(1.0)
             continue
 
         if attempt < max_attempts:
             Autoclash.scroll_random(Autoclash.WHEEL_DELTA * 3)
-            time.sleep(0.5)
+            _worker_pauseable_sleep(0.5)
 
     return None
 
@@ -409,6 +421,10 @@ def _switch_to_target_fill_account(candidate_accounts: List[str]) -> Optional[st
     def find_visible_with_scroll(scroll_direction: str = "down"):
         max_scroll_attempts = 50
         for scan_idx in range(max_scroll_attempts + 1):
+            if Autoclash._default_session.pause_requested:
+                Autoclash.check_pause(Autoclash._default_session)
+            if Autoclash._default_session.stop_requested:
+                return {}
             log(f"SwitchAcct: scan {scan_idx}/{max_scroll_attempts} direction={scroll_direction}")
             visible = _match_visible_switch_accounts(candidate_map)
             if visible:
@@ -443,7 +459,7 @@ def _switch_to_target_fill_account(candidate_accounts: List[str]) -> Optional[st
 
     Autoclash.click_with_jitter(*selected_data["center"])
     Autoclash.random_delay()
-    time.sleep(3.0)
+    _worker_pauseable_sleep(3.0)
     _click_account_load_okay_if_present()
     _click_confirm_if_present()
 
@@ -678,6 +694,8 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
             total_upgrades = 0
 
             while not self._stop_requested:
+                if Autoclash._default_session.pause_requested:
+                    Autoclash.check_pause(Autoclash._default_session)
                 self.overlay_draw.emit([], "Home Village — Checking village context")
                 if not self._ensure_home_village_context(max_attempts=60):
                     if self._stop_requested:
@@ -1095,7 +1113,8 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
         self._stop_requested = True
         Autoclash._default_session.stop_requested = True
 
-    def _run_single_cycle_battle(self, battle_index: int, target_account: str) -> str:
+    def _run_single_cycle_battle(self, battle_index: int, target_account: str,
+                                 account_attack_counts: dict, account_upgrade_counts: dict) -> str:
         try:
             battle_start = time.time()
             Autoclash._default_session.walls_upgraded_this_battle = 0
@@ -1120,6 +1139,11 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 self.status_update.emit("Account", f"Account changed to '{confirmed}' while targeting '{target_account}'")
                 return "wrong-account"
 
+            if Autoclash._default_session.pause_requested:
+                Autoclash.check_pause(Autoclash._default_session)
+            if self._stop_requested:
+                return "stop"
+
             self.overlay_draw.emit([], f"Cycle Accounts — Battle {battle_index}: Preparing")
             self.status_update.emit("Phase 2A", "Preparing battle...")
             bot_reporter.update_phase("Phase 2A", "Preparing battle...")
@@ -1128,6 +1152,11 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                     return "stop"
                 time.sleep(3)
                 return "failed"
+
+            if Autoclash._default_session.pause_requested:
+                Autoclash.check_pause(Autoclash._default_session)
+            if self._stop_requested:
+                return "stop"
 
             self.overlay_draw.emit([], f"Cycle Accounts — Battle {battle_index}: Deploying troops")
             self.status_update.emit("Phase 2B", "Deploying troops...")
@@ -1138,6 +1167,11 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 time.sleep(3)
                 return "failed"
 
+            if Autoclash._default_session.pause_requested:
+                Autoclash.check_pause(Autoclash._default_session)
+            if self._stop_requested:
+                return "stop"
+
             self.overlay_draw.emit([], f"Cycle Accounts — Battle {battle_index}: Waiting for return")
             self.status_update.emit("Phase 3", "Waiting for battle to end...")
             bot_reporter.update_phase("Phase 3", "Waiting for battle to end...")
@@ -1147,11 +1181,15 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 time.sleep(3)
                 return "failed"
 
+            if Autoclash._default_session.pause_requested:
+                Autoclash.check_pause(Autoclash._default_session)
+            if self._stop_requested:
+                return "stop"
+
             # Phase 4 — wall upgrades (respects each account's own setting)
             self.status_update.emit("Loading", "Waiting for Phase 4 to load...")
             bot_reporter.update_phase("Loading", "Waiting for Phase 4 to load...")
             time.sleep(5)
-            total_upgrades = 0
             if CONFIG.get("auto_upgrade_walls", True):
                 self.overlay_draw.emit([], f"Cycle Accounts — Battle {battle_index}: Upgrading walls")
                 self.status_update.emit("Phase 4", "Upgrading walls...")
@@ -1159,11 +1197,9 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 phase4_upgrade()
                 _walls = Autoclash._default_session.walls_upgraded_this_battle
                 if _walls:
-                    total_upgrades += _walls
-                    bot_reporter.report_upgrade(
-                        Autoclash._default_session.current_account_name or target_account,
-                        "walls", total_upgrades,
-                    )
+                    _upg_acct = Autoclash._default_session.current_account_name or target_account
+                    account_upgrade_counts[_upg_acct] = account_upgrade_counts.get(_upg_acct, 0) + _walls
+                    bot_reporter.report_upgrade(_upg_acct, "walls", account_upgrade_counts[_upg_acct])
             else:
                 self.status_update.emit("Phase 4", "Phase 4 skipped (auto upgrade disabled)")
                 bot_reporter.update_phase("Phase 4", "Phase 4 skipped (auto upgrade disabled)")
@@ -1173,11 +1209,9 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 self.status_update.emit("Phase 5", "Upgrading account...")
                 bot_reporter.update_phase("Phase 5", "Upgrading account...")
                 upgrade_account()
-                total_upgrades += 1
-                bot_reporter.report_upgrade(
-                    Autoclash._default_session.current_account_name or target_account,
-                    "account upgrade", total_upgrades,
-                )
+                _upg_acct = Autoclash._default_session.current_account_name or target_account
+                account_upgrade_counts[_upg_acct] = account_upgrade_counts.get(_upg_acct, 0) + 1
+                bot_reporter.report_upgrade(_upg_acct, "account upgrade", account_upgrade_counts[_upg_acct])
             else:
                 self.status_update.emit("Phase 5", "Phase 5 skipped (auto upgrade storages disabled)")
                 bot_reporter.update_phase("Phase 5", "Phase 5 skipped (auto upgrade storages disabled)")
@@ -1193,7 +1227,8 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 _gold = snapshot.get("gold", 0) if isinstance(snapshot, dict) else 0
                 _elixir = snapshot.get("elixir", 0) if isinstance(snapshot, dict) else 0
                 _dark = snapshot.get("dark_elixir", snapshot.get("dark", 0)) if isinstance(snapshot, dict) else 0
-                bot_reporter.report_battle_complete(account_name, _gold, _elixir, _dark, battle_index)
+                account_attack_counts[account_name] = account_attack_counts.get(account_name, 0) + 1
+                bot_reporter.report_battle_complete(account_name, _gold, _elixir, _dark, account_attack_counts[account_name])
 
             self.overlay_draw.emit([], f"Cycle Accounts — Battle {battle_index} complete")
             self.status_update.emit("Idle", f"Battle {battle_index} completed on '{target_account}'")
@@ -1219,6 +1254,8 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             battle_count = 0
             account_index = 0
             consecutive_switch_failures = 0
+            account_attack_counts: dict = {}
+            account_upgrade_counts: dict = {}
 
             while not self._stop_requested:
                 target = self.selected_accounts[account_index % len(self.selected_accounts)]
@@ -1283,7 +1320,7 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                         "Battle",
                         f"Attack {attacks_done}/{self.attacks_per_account} on '{target}' (total: {battle_count})..."
                     )
-                    result = self._run_single_cycle_battle(battle_count, target)
+                    result = self._run_single_cycle_battle(battle_count, target, account_attack_counts, account_upgrade_counts)
 
                     if result == "stop":
                         break

@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Optional, Tuple, List
 from PIL import Image, ImageEnhance
 import vision as _vision
+import bot_reporter
 
 # Optional: keyboard module for global Space key detection
 try:
@@ -1254,50 +1255,91 @@ def click_text_in_box_and_wait(
 # ================================
 
 
- 
+
 class SpaceListener:
-    """Listens for Space key press to pause/resume the script."""
-    
+    """Listens for hotkeys: SPACE = pause/resume, Ctrl+D = disconnect Remote Desktop."""
+
+    _DISCONNECT_BAT = r'C:\Users\fghgh\Desktop\disconnect.bat'
+
     def __init__(self, session=None):
         self.handler = None
+        self._disconnect_handler = None
         self._session = session
-    
+
     def start(self):
-        """Start listening for Space key."""
+        """Register Space and Ctrl+D hotkeys."""
         session = self._session
         if not HAS_KEYBOARD:
-            log("WARNING: 'keyboard' module not installed. Space key listener disabled.")
+            log("WARNING: 'keyboard' module not installed. Hotkey listeners disabled.")
             log("Install with: pip install keyboard")
             return
         if session is None:
             log("WARNING: SpaceListener has no session reference; pausing disabled.")
             return
-        
+
         def on_space(_):
             session.pause_requested = not session.pause_requested
             if session.pause_requested:
-                log("\n" + "="*60)
-                log("PAUSED - Press SPACE to resume")
-                log("="*60)
+                log("\n" + "=" * 60)
+                log("⏸  PAUSED — Press SPACE to resume")
+                log("=" * 60)
             else:
-                log("\n" + "="*60)
-                log("RESUMED")
-                log("="*60)
-        
+                log("\n" + "=" * 60)
+                log("▶  RESUMED")
+                log("=" * 60)
+
+        def on_disconnect():
+            log("\n" + "=" * 60)
+            log("🔌 Ctrl+D pressed — disconnecting Remote Desktop session...")
+            log("=" * 60)
+            try:
+                subprocess.Popen(self._DISCONNECT_BAT, shell=True)
+            except Exception as e:
+                log(f"WARNING: Failed to launch disconnect.bat: {e}")
+
         self.handler = keyboard.on_press_key("space", on_space, suppress=False)
-        log("Space key listener started. Press SPACE to pause/resume at any time.")
-    
+        self._disconnect_handler = keyboard.add_hotkey("ctrl+d", on_disconnect, suppress=False)
+        log("Hotkeys registered: SPACE = pause/resume, Ctrl+D = disconnect Remote Desktop")
+
     def stop(self):
-        """Stop listening for Space key."""
-        if HAS_KEYBOARD and self.handler:
+        """Unregister all hotkeys."""
+        if not HAS_KEYBOARD:
+            return
+        if self.handler:
             try:
                 keyboard.unhook(self.handler)
+            except Exception:
+                pass
+        if self._disconnect_handler:
+            try:
+                keyboard.remove_hotkey(self._disconnect_handler)
             except Exception:
                 pass
 
 
 
 
+
+
+def check_pause(session) -> None:
+    """Block until session.pause_requested is cleared, polling every 0.1 s."""
+    if not session.pause_requested:
+        return
+    bot_reporter.update_phase("PAUSED", "Bot paused — press SPACE to resume")
+    while session.pause_requested:
+        time.sleep(0.1)
+    bot_reporter.update_phase("Resuming", "Resuming...")
+
+
+def _pauseable_sleep(session, seconds: float) -> None:
+    """Sleep for `seconds` while honouring pause/stop requests every 0.1 s."""
+    iters = max(1, int(seconds * 10))
+    for _ in range(iters):
+        if session.stop_requested:
+            break
+        if session.pause_requested:
+            check_pause(session)
+        time.sleep(0.1)
 
 
 def random_delay() -> None:
@@ -1836,7 +1878,7 @@ class HomeBattleSession:
                 log(f"Clan Games: Waiting 1 second after {action_desc}")
             else:
                 log("Clan Games: Waiting 1 second after click")
-            time.sleep(1.0)
+            _pauseable_sleep(self, 1.0)
 
         log("Clan Games: Starting pre-attack routine")
 
@@ -1865,7 +1907,7 @@ class HomeBattleSession:
                 log(f"Clan Games: Found stand at {stand_coords}, clicking")
                 clan_games_click(*stand_coords, action_desc="stand click")
                 log("Clan Games: Waiting 5 seconds for challenges screen to load")
-                time.sleep(5.0)
+                _pauseable_sleep(self, 5.0)
                 break
             if attempt < stand_retry_attempts:
                 time.sleep(stand_retry_delay)
@@ -1988,7 +2030,7 @@ class HomeBattleSession:
 
             log(f"Clan Games: Clicking start at {start_coords}")
             clan_games_click(*start_coords, action_desc="start button click")
-            time.sleep(2.0)
+            _pauseable_sleep(self, 2.0)
 
             log("Clan Games: Clicking start position again")
             clan_games_click(*start_coords, action_desc="second start click")
@@ -2500,7 +2542,7 @@ class HomeBattleSession:
             """Click item, find arrow_orange.png, click 100px left+down, find build_confirm.png, click it."""
             log(f"Phase5: Clicking item (placement flow) at {item_coords}...")
             click_with_jitter(*item_coords)
-            time.sleep(2.0)
+            _pauseable_sleep(self, 2.0)
 
             log("Phase5: Searching for 'arrow_orange.png'...")
             arrow_coords = _find_template_with_retry("arrow_orange.png")
@@ -2512,7 +2554,7 @@ class HomeBattleSession:
             click_y = arrow_coords[1] + 100
             log(f"Phase5: Clicking 100px left and down from arrow at ({click_x}, {click_y})")
             click_with_jitter(click_x, click_y)
-            time.sleep(0.8)
+            _pauseable_sleep(self, 0.8)
 
             log("Phase5: Searching for 'build_confirm.png'...")
             build_confirm_coords = _find_template_with_retry("build_confirm.png")
@@ -2599,7 +2641,7 @@ class HomeBattleSession:
                     if _do_place_new_building(storage_coords):
                         log(f"Phase5: New storage placed (iteration {iteration}) - waiting 2s then re-checking conditions")
                         upgraded_anything = True
-                        time.sleep(2)
+                        _pauseable_sleep(self, 2)
                         continue
                     log("Phase5: New storage placement failed - continuing to Phase B")
                 else:
@@ -2607,7 +2649,7 @@ class HomeBattleSession:
                     if _do_upgrade_confirm(storage_coords):
                         log(f"Phase5: Storage upgraded (iteration {iteration}) - waiting 2s then re-checking conditions")
                         upgraded_anything = True
-                        time.sleep(2)
+                        _pauseable_sleep(self, 2)
                         continue
                     log("Phase5: Storage upgrade failed - continuing to Phase B")
 
@@ -2657,7 +2699,7 @@ class HomeBattleSession:
                 if _do_place_new_building(new_accepted_coords):
                     log(f"Phase5: New building placed (iteration {iteration}) - waiting 2s then re-checking conditions")
                     upgraded_anything = True
-                    time.sleep(2)
+                    _pauseable_sleep(self, 2)
                     continue
                 log("Phase5: New building placement failed - exiting Phase 5")
                 break
@@ -2745,7 +2787,7 @@ class HomeBattleSession:
             if _do_upgrade_confirm(other_coords):
                 log(f"upgrade_account: Building upgraded (iteration {iteration}) — waiting 2s then re-checking")
                 upgraded_anything = True
-                time.sleep(2)
+                _pauseable_sleep(self, 2)
                 continue
             else:
                 log("upgrade_account: Building upgrade failed — exiting")
@@ -2834,7 +2876,7 @@ class HomeBattleSession:
         def _do_place_new_building(item_coords: Tuple[int, int]) -> bool:
             log(f"Rush Phase5: Clicking item (placement flow) at {item_coords}...")
             click_with_jitter(*item_coords)
-            time.sleep(2.0)
+            _pauseable_sleep(self, 2.0)
             arrow_coords = _find_template_with_retry("arrow_orange.png")
             if not arrow_coords:
                 log("Rush Phase5: 'arrow_orange.png' not found - aborting placement")
@@ -2842,7 +2884,7 @@ class HomeBattleSession:
             click_x = arrow_coords[0] - 100
             click_y = arrow_coords[1] + 100
             click_with_jitter(click_x, click_y)
-            time.sleep(0.8)
+            _pauseable_sleep(self, 0.8)
             build_confirm_coords = _find_template_with_retry("build_confirm.png")
             if not build_confirm_coords:
                 log("Rush Phase5: 'build_confirm.png' not found - aborting placement")
@@ -2914,14 +2956,14 @@ class HomeBattleSession:
                     log(f"Rush Phase5: New storage to place at y={storage_y}")
                     if _do_place_new_building(storage_coords):
                         upgraded_anything = True
-                        time.sleep(2)
+                        _pauseable_sleep(self, 2)
                         continue
                     log("Rush Phase5: New storage placement failed — continuing to Phase B")
                 else:
                     log(f"Rush Phase5: Existing storage to upgrade at y={storage_y}")
                     if _do_upgrade_confirm(storage_coords):
                         upgraded_anything = True
-                        time.sleep(2)
+                        _pauseable_sleep(self, 2)
                         continue
                     log("Rush Phase5: Storage upgrade failed — continuing to Phase B")
 
@@ -2970,7 +3012,7 @@ class HomeBattleSession:
                 if _do_place_new_building(new_accepted_coords):
                     log(f"Rush Phase5: New building placed (iteration {iteration})")
                     upgraded_anything = True
-                    time.sleep(2)
+                    _pauseable_sleep(self, 2)
                     continue
                 log("Rush Phase5: New building placement failed — continuing to Phase C")
 
@@ -3033,7 +3075,7 @@ class HomeBattleSession:
             if _do_upgrade_confirm(th_coords):
                 log(f"Rush Phase5: Town Hall upgraded (iteration {iteration})")
                 upgraded_anything = True
-                time.sleep(2)
+                _pauseable_sleep(self, 2)
                 continue
             else:
                 log("Rush Phase5: Town Hall upgrade confirm failed — exiting")
@@ -3099,7 +3141,7 @@ class HomeBattleSession:
             if is_pixel_near_color(85, 39, achievement_red, tolerance=80):
                 log("Phase 1: Achievement pixel is red — clicking (85, 39) to open achievements")
                 click_with_jitter(85, 39)
-                time.sleep(1.0)
+                _pauseable_sleep(self, 1.0)
                 claim_coords = find_template("claim_reward.png", confidence=0.8)
                 if claim_coords:
                     log(f"Phase 1: Clicking claim_reward.png at {claim_coords}")
@@ -3131,7 +3173,7 @@ class HomeBattleSession:
             attack_found = search_and_click(CONFIG["attack_button"], "Attack Button", max_attempts=15, use_fallback=False)
             if not attack_found:
                 log(f"Failed to find attack button (attempt {phase1_attempt}/{max_phase1_attempts})")
-                time.sleep(1.0)
+                _pauseable_sleep(self, 1.0)
                 continue
 
             log("Attack button clicked, waiting for find button menu...")
@@ -3146,7 +3188,7 @@ class HomeBattleSession:
                     log(f"Found review_nothanks.png at {review_coords} — clicking to dismiss")
                     click_with_jitter(*review_coords)
                     time.sleep(0.5)
-                time.sleep(1.0)
+                _pauseable_sleep(self, 1.0)
                 continue
 
             time.sleep(0.5)
@@ -3194,7 +3236,7 @@ class HomeBattleSession:
                             log(f"Drag attempt {drag_attempt}/{max_drag_attempts}")
                             pyautogui.moveTo(1288, 586, duration=0.1)
                             pyautogui.dragTo(733, 586, duration=0.3, button="left")
-                            time.sleep(1.0)
+                            _pauseable_sleep(self, 1.0)
                             spell_icon_coords = find_template(spell_template)
                             if spell_icon_coords is None:
                                 log(f"{spell_template} not found after drag {drag_attempt}/{max_drag_attempts}")
@@ -3275,7 +3317,7 @@ class HomeBattleSession:
             enter_found = search_and_click(CONFIG["enter_battle"], "Enter Battle Button", max_attempts=15, use_fallback=False)
             if not enter_found:
                 log(f"Failed to find enter battle button (attempt {phase1_attempt}/{max_phase1_attempts})")
-                time.sleep(1.0)
+                _pauseable_sleep(self, 1.0)
                 continue
 
             # Additional click after entering battle
@@ -3740,7 +3782,7 @@ class HomeBattleSession:
 
                 # Wait for loot numbers to appear, then capture before exiting
                 log("Waiting 2 seconds to capture loot before returning...")
-                time.sleep(2.5)
+                _pauseable_sleep(self, 2.5)
                 try:
                     snapshot = self.loot_tracker.extract_and_record()
                     log(f"✓ Loot captured successfully: {snapshot}")
@@ -3764,7 +3806,7 @@ class HomeBattleSession:
 
                 # Wait for loot numbers to appear, then capture before exiting
                 log("Waiting 2 seconds to capture loot before claiming reward...")
-                time.sleep(2.5)
+                _pauseable_sleep(self, 2.5)
                 try:
                     snapshot = self.loot_tracker.extract_and_record()
                     log(f"✓ Loot captured successfully: {snapshot}")
@@ -3780,7 +3822,7 @@ class HomeBattleSession:
 
                 # Wait 5 seconds
                 log("Waiting 5 seconds after claiming reward...")
-                time.sleep(5)
+                _pauseable_sleep(self, 5)
 
                 # Click the screen 5 times with 1 second gaps
                 log("Clicking screen 5 times with 1 second intervals...")
@@ -3790,11 +3832,11 @@ class HomeBattleSession:
                     log(f"Click {i}/5 at center ({center_x}, {center_y})")
                     pyautogui.click(center_x, center_y)
                     if i < 5:  # Don't wait after the last click
-                        time.sleep(1)
+                        _pauseable_sleep(self, 1)
 
                 # Wait 2 seconds after the 5th click
                 log("Waiting 2 seconds after 5th click...")
-                time.sleep(2)
+                _pauseable_sleep(self, 2)
 
                 # Click at (955, 902)
                 log("Clicking at final position (955, 902)")
@@ -3815,7 +3857,12 @@ class HomeBattleSession:
                 return False
 
             log(f"Battle still in progress... (check #{attempt})")
-            time.sleep(poll_interval)
+            for _ in range(max(1, int(poll_interval * 10))):
+                if self.stop_requested:
+                    break
+                if self.pause_requested:
+                    check_pause(self)
+                time.sleep(0.1)
 
     def dismiss_star_bonus_popup_after_return(self, max_attempts: int = 5, retry_delay_seconds: float = 1.0) -> bool:
         """
@@ -4066,7 +4113,7 @@ class HomeBattleSession:
                 # PHASE 4: Upgrade walls if loot is full (conditional on auto_upgrade_walls setting)
                 if CONFIG.get("auto_upgrade_walls", True):
                     log("Waiting 5 seconds before Phase 4 to allow loading...")
-                    time.sleep(5)
+                    _pauseable_sleep(self, 5)
                     self.phase4_upgrade()
                 else:
                     log("Phase 4 skipped (auto_upgrade_walls is False)")
@@ -4109,7 +4156,7 @@ class HomeBattleSession:
 
                 # Small delay before next battle
                 log("Waiting before starting next battle...")
-                time.sleep(2.0)
+                _pauseable_sleep(self, 2.0)
 
         except KeyboardInterrupt:
             log("\n" + "=" * 60)

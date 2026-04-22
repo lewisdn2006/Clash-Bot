@@ -23,7 +23,7 @@ BOT_SECRET = "clash-monitor-lewis123"   # must match worker.js
 VERSION = "1.0"
 
 # How often to flush the queue and send updates (seconds)
-FLUSH_INTERVAL = 8
+FLUSH_INTERVAL = 90
 # ─────────────────────────────────────────────────────────────────────────────
 
 _queue = queue.Queue()
@@ -43,10 +43,14 @@ _session_data = {
 
 _running = False
 _thread = None
+_kv_limit_hit = False
 
 
 def _send(payload: dict):
     """Send a single payload to the Cloudflare Worker."""
+    global _kv_limit_hit
+    if _kv_limit_hit:
+        return
     try:
         resp = requests.post(
             WORKER_URL,
@@ -57,6 +61,13 @@ def _send(payload: dict):
             },
             timeout=8,
         )
+        if resp.status_code == 400 and "KV put() limit exceeded" in resp.text:
+            _kv_limit_hit = True
+            print(
+                "[Reporter] ⚠ Cloudflare KV daily write limit reached — "
+                "dashboard reporting disabled until midnight. Bot continues running normally."
+            )
+            return
         if resp.status_code != 200:
             print(f"[Reporter] Worker returned {resp.status_code}: {resp.text[:100]}")
     except Exception as e:
@@ -83,12 +94,13 @@ def _flush_worker():
 
         now = time.time()
         if now - last_flush >= FLUSH_INTERVAL:
-            with _lock:
-                payload = dict(_session_data)
-            if pending_log:
-                payload["log_message"] = pending_log
-                pending_log = None
-            _send(payload)
+            if not _kv_limit_hit:
+                with _lock:
+                    payload = dict(_session_data)
+                if pending_log:
+                    payload["log_message"] = pending_log
+                    pending_log = None
+                _send(payload)
             last_flush = now
 
         time.sleep(1)
@@ -96,9 +108,10 @@ def _flush_worker():
 
 def start():
     """Start the background reporter thread. Call once when bot starts."""
-    global _running, _thread
+    global _running, _thread, _kv_limit_hit
     if _running:
         return
+    _kv_limit_hit = False
     _running = True
     # Signal a session reset to clear old data on the dashboard
     _send({"reset_session": True, "version": VERSION})
