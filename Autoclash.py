@@ -1289,11 +1289,16 @@ class SpaceListener:
                 log("=" * 60)
 
         def on_disconnect():
-            log("\n" + "=" * 60)
             log("🔌 Ctrl+D pressed — disconnecting Remote Desktop session...")
-            log("=" * 60)
             try:
-                subprocess.Popen(self._DISCONNECT_BAT, shell=True)
+                subprocess.Popen(
+                    [
+                        "powershell.exe",
+                        "-Command",
+                        "Start-Process cmd.exe -ArgumentList '/c \"C:\\Users\\fghgh\\Desktop\\disconnect.bat\"' -Verb RunAs -WindowStyle Hidden"
+                    ],
+                    shell=False
+                )
             except Exception as e:
                 log(f"WARNING: Failed to launch disconnect.bat: {e}")
 
