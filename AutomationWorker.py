@@ -1394,7 +1394,10 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
 
     def run(self):
         try:
+            bot_reporter.start()
             self.status_update.emit("Initializing", "Starting BB automation...")
+            bot_reporter.update_phase("Initializing", "Starting BB automation...")
+            bot_reporter.log("Builder Base automation started")
             self.overlay_draw.emit([], "Builder Base — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             Autoclash_BB.space_listener.start()
@@ -1403,10 +1406,12 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
 
             while not self._stop_requested and not Autoclash_BB._default_session.shutdown_requested:
                 self.status_update.emit(f"Battle {battle_count + 1}", f"Starting BB battle {battle_count + 1}...")
+                bot_reporter.update_phase("Battle", f"Starting BB battle {battle_count + 1}...")
 
                 try:
                     self.overlay_draw.emit([], f"Builder Base — Battle {battle_count + 1}: Finding match")
                     self.status_update.emit("Phase 1", "Finding match...")
+                    bot_reporter.update_phase("Phase 1", "Finding BB match...")
                     if not Autoclash_BB.phase1_find_match():
                         if self._stop_requested or Autoclash_BB._default_session.shutdown_requested:
                             break
@@ -1418,6 +1423,7 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
 
                     self.overlay_draw.emit([], f"Builder Base — Battle {battle_count + 1}: Attacking")
                     self.status_update.emit("Phase 2", "Executing attack...")
+                    bot_reporter.update_phase("Phase 2", "Executing BB attack...")
                     try:
                         _p2_ok = Autoclash_BB.phase2_attack()
                     except SystemExit:
@@ -1437,11 +1443,13 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
                     self.battle_completed.emit(battle_count, stars)
                     self.overlay_draw.emit([], f"Builder Base — Battle {battle_count} complete  ({stars} stars)")
                     self.status_update.emit("Idle", f"BB Battle {battle_count} completed! Stars: {stars}")
+                    bot_reporter.update_phase("Idle", f"BB battle {battle_count} completed ({stars} stars)")
                     time.sleep(2)
 
                 except Exception as e:
                     log(f"ERROR in BB battle {battle_count}: {e}")
                     self.status_update.emit("Error", f"Error in BB battle {battle_count}: {e}")
+                    bot_reporter.report_error(f"Error in BB battle {battle_count}: {e}")
                     if self._stop_requested or Autoclash_BB._default_session.shutdown_requested:
                         break
                     self._handle_repeated_failure("bb.battle.exception", action_label="Error")
@@ -1451,15 +1459,19 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
 
             if self._stop_requested or Autoclash_BB._default_session.shutdown_requested:
                 self.status_update.emit("Stopped", "BB Automation stopped")
+                bot_reporter.update_phase("Stopped", "BB automation stopped")
             else:
                 self.status_update.emit("Complete", f"BB Automation completed! Total: {battle_count}")
+                bot_reporter.update_phase("Complete", f"BB automation completed (total battles: {battle_count})")
 
         except Exception as e:
             log(f"FATAL ERROR in BB automation thread: {e}")
             self.error_occurred.emit(str(e))
+            bot_reporter.report_error(f"FATAL BB worker error: {e}")
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
+            bot_reporter.stop()
             Autoclash_BB._default_session.shutdown_requested = False
             self.finished.emit()
 
@@ -1501,7 +1513,10 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
     def run(self):  # noqa: C901
         original_thresh = Autoclash_BB.CONFIG.get("TEMPLATE_THRESH_DEFAULT", 0.85)
         try:
+            bot_reporter.start()
             self.status_update.emit("Initializing", "Starting BB Fill Accounts automation...")
+            bot_reporter.update_phase("Initializing", "Starting BB Fill Accounts automation...")
+            bot_reporter.log("BB Fill Accounts automation started")
             self.overlay_draw.emit([], "BB Fill Accounts — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             Autoclash_BB._default_session.shutdown_requested = False
@@ -1529,10 +1544,13 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                     if self._bb_stopped():
                         break
                     self._handle_repeated_failure("bbfill.switch.account", action_label="Switch")
+                    bot_reporter.report_error("BB Fill: failed to switch account")
                     time.sleep(3)
                     continue
 
                 self.account_detected.emit(target)
+                bot_reporter.update_account(target)
+                bot_reporter.update_phase("Switch", f"Switched to '{target}'")
 
                 self.overlay_draw.emit([], f"BB Fill Accounts — Preparing BB for '{target}'")
                 if not self._prepare_builder_base_after_switch(max_attempts=5):
@@ -1545,6 +1563,7 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 if self._are_bb_storages_full():
                     self.completed_accounts.add(target)
                     self.status_update.emit("Storage", f"'{target}' already full for BB. Marked complete.")
+                    bot_reporter.update_phase("Storage", f"'{target}' already full for BB")
                     continue
 
                 consecutive_p1_fail = 0
@@ -1556,6 +1575,7 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
 
                     self.overlay_draw.emit([], f"BB Fill Accounts — Battle {battle_count + 1}: Finding match")
                     self.status_update.emit("Battle", f"Starting BB fill battle {battle_count + 1} on '{target}'...")
+                    bot_reporter.update_phase("Battle", f"Starting BB fill battle {battle_count + 1} on '{target}'")
 
                     if not Autoclash_BB.phase1_find_match():
                         if self._bb_stopped():
@@ -1594,21 +1614,26 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                     self.battle_completed.emit(battle_count, stars)
                     self.overlay_draw.emit([], f"BB Fill Accounts — Battle {battle_count} complete  ({stars} stars)")
                     self.status_update.emit("Idle", f"BB fill battle {battle_count} complete on '{target}'")
+                    bot_reporter.update_phase("Idle", f"BB fill battle {battle_count} complete on '{target}'")
                     time.sleep(2)
 
             Autoclash_BB.space_listener.stop()
 
             if self._bb_stopped():
                 self.status_update.emit("Stopped", "BB Fill Accounts stopped")
+                bot_reporter.update_phase("Stopped", "BB Fill Accounts stopped")
             else:
                 self.status_update.emit("Complete", "BB Fill Accounts completed: all selected accounts are full")
+                bot_reporter.update_phase("Complete", "BB Fill Accounts completed")
 
         except Exception as e:
             log(f"FATAL ERROR in BB fill automation thread: {e}")
             self.error_occurred.emit(str(e))
+            bot_reporter.report_error(f"FATAL BB Fill worker error: {e}")
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
+            bot_reporter.stop()
             Autoclash_BB._default_session.shutdown_requested = False
             Autoclash_BB.CONFIG["TEMPLATE_THRESH_DEFAULT"] = original_thresh
             self.finished.emit()
@@ -1648,6 +1673,9 @@ class ClanGamesWorker(QThread):
     def run(self):
         log("ClanGamesWorker: started")
         self.status_update.emit("Starting", "Clan Games Cycler starting…")
+        bot_reporter.start()
+        bot_reporter.update_phase("Starting", "Clan Games Cycler starting...")
+        bot_reporter.log("Clan Games Cycler started")
 
         last_trash_by_ingame: Dict[str, float] = {}
 
@@ -1655,6 +1683,7 @@ class ClanGamesWorker(QThread):
             while not self._stopped():
                 # --- Run one account cycle ---
                 self.status_update.emit("Cycle", "Verifying account…")
+                bot_reporter.update_phase("Cycle", "Verifying account...")
                 current_ingame, trashed_any, cooldown_detected, stop_all = (
                     self._run_single_cycle()
                 )
@@ -1664,6 +1693,7 @@ class ClanGamesWorker(QThread):
 
                 if stop_all:
                     self.status_update.emit("Complete", "All challenges cycled — nothing left to trash")
+                    bot_reporter.update_phase("Complete", "All challenges cycled - nothing left to trash")
                     break
 
                 if current_ingame and cooldown_detected:
@@ -1681,9 +1711,11 @@ class ClanGamesWorker(QThread):
 
                 # --- Switch account ---
                 self.status_update.emit("Switching", "Switching account…")
+                bot_reporter.update_phase("Switching", "Switching account...")
                 switched = self._choose_and_switch(last_trash_by_ingame)
                 if not switched:
                     self.status_update.emit("Retry", "Account switch failed — retrying in 5s")
+                    bot_reporter.update_phase("Retry", "Account switch failed - retrying in 5s")
                     for _ in range(50):  # 5s in 0.1s ticks
                         if self._stopped():
                             break
@@ -1692,8 +1724,10 @@ class ClanGamesWorker(QThread):
 
                 if current_ingame:
                     self.account_switched.emit(current_ingame)
+                    bot_reporter.update_account(current_ingame)
 
                 self.status_update.emit("Switched", "Account switched — next cycle in 2s")
+                bot_reporter.update_phase("Switched", "Account switched - next cycle in 2s")
                 time.sleep(2.0)
 
         except Exception as e:
@@ -1701,10 +1735,13 @@ class ClanGamesWorker(QThread):
             import traceback
             traceback.print_exc()
             self.error_occurred.emit(str(e))
+            bot_reporter.report_error(f"Clan Games Cycler fatal error: {e}")
         finally:
             self.overlay_clear.emit()
             if self._stopped():
                 self.status_update.emit("Stopped", "Clan Games Cycler stopped by user")
+                bot_reporter.update_phase("Stopped", "Clan Games Cycler stopped by user")
+            bot_reporter.stop()
             self.finished.emit()
 
     # ------------------------------------------------------------------
@@ -1876,11 +1913,15 @@ class ClanGamesMasterWorker(QThread, _RecoveryMixin):
 
     def run(self):
         try:
+            bot_reporter.start()
+            bot_reporter.update_phase("Starting", "Clan Games Master Bot starting...")
+            bot_reporter.log("Clan Games Master Bot started")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
 
             def status_fn(phase: str, message: str) -> None:
                 self.status_update.emit(phase, message)
+                bot_reporter.update_phase(phase, message)
                 pl = phase.lower()
                 ml = message.lower()
                 if "attacking" in pl or "phase" in pl:
@@ -1894,9 +1935,12 @@ class ClanGamesMasterWorker(QThread, _RecoveryMixin):
                 settings = self._get_account_settings(account_name)
                 self._apply_settings(settings)
                 self.account_changed.emit(account_name)
+                bot_reporter.update_account(account_name)
+                bot_reporter.update_phase("Account", f"Using '{account_name}' settings")
 
             def account_completed_fn(account_name: str) -> None:
                 self.account_completed.emit(account_name)
+                bot_reporter.update_phase("Completed", f"{account_name} completed")
 
             clangamesmaster.run_master_bot(
                 stop_fn=self._stopped,
@@ -1913,12 +1957,15 @@ class ClanGamesMasterWorker(QThread, _RecoveryMixin):
             import traceback
             traceback.print_exc()
             self.error_occurred.emit(str(e))
+            bot_reporter.report_error(f"Clan Games Master fatal error: {e}")
         finally:
             home_space_listener.stop()
             _set_overlay_callback(None)
             self.overlay_clear.emit()
             if self._stopped():
                 self.status_update.emit("Stopped", "Clan Games Master Bot stopped by user")
+                bot_reporter.update_phase("Stopped", "Clan Games Master Bot stopped by user")
+            bot_reporter.stop()
             self.finished.emit()
 
 
@@ -1955,6 +2002,9 @@ class ClanScouterWorker(QThread):
         log("ClanScouterWorker: started")
         _keyboard_registered = False
         try:
+            bot_reporter.start()
+            bot_reporter.update_phase("Starting", "Clan Scouter starting...")
+            bot_reporter.log("Clan Scouter started")
             # Register space key to allow instant stop
             try:
                 import keyboard as _kb
@@ -1969,6 +2019,7 @@ class ClanScouterWorker(QThread):
             def _status(phase: str, msg: str):
                 log(f"Scout: {phase} — {msg}")
                 self.status_update.emit(phase, msg)
+                bot_reporter.update_phase(phase, msg)
                 self.overlay_draw.emit([], f"Clan Scouter — {phase}: {msg[:60]}")
                 # Emit bookmark count whenever the message carries one
                 m = re.search(r"Total:\s*(\d+)", msg)
@@ -1982,14 +2033,17 @@ class ClanScouterWorker(QThread):
                         "Complete",
                         f"Scouter finished. Bookmarks made this session: {total}",
                     )
+                    bot_reporter.update_phase("Complete", f"Scouter finished. Bookmarks made: {total}")
             except RuntimeError as exc:
                 log(f"ClanScouterWorker: Aborted — {exc}")
                 self.status_update.emit("Aborted", str(exc))
                 self.error_occurred.emit(str(exc))
+                bot_reporter.report_error(f"Clan Scouter aborted: {exc}")
 
         except Exception as exc:
             log(f"ClanScouterWorker: Fatal error: {exc}")
             self.error_occurred.emit(str(exc))
+            bot_reporter.report_error(f"Clan Scouter fatal error: {exc}")
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
@@ -2001,6 +2055,8 @@ class ClanScouterWorker(QThread):
                     pass
             if self._stop_requested:
                 self.status_update.emit("Stopped", "Clan Scouter stopped")
+                bot_reporter.update_phase("Stopped", "Clan Scouter stopped")
+            bot_reporter.stop()
             self.finished.emit()
 
 
@@ -2040,6 +2096,9 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
         log("ClanCapitalWorker: started")
         _keyboard_registered = False
         try:
+            bot_reporter.start()
+            bot_reporter.update_phase("Starting", "Capital Raid starting...")
+            bot_reporter.log("Capital Raid automation started")
             try:
                 import keyboard as _kb
                 _kb.add_hotkey("space", self.stop)
@@ -2054,6 +2113,7 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
             def _status(phase: str, msg: str):
                 log(f"CapitalWorker: {phase} — {msg}")
                 self.status_update.emit(phase, msg)
+                bot_reporter.update_phase(phase, msg)
                 self.overlay_draw.emit([], f"Capital Raid — {phase}: {msg[:60]}")
 
             _EXCLUDED_ACCOUNTS = {"lewis", "williamleeming"}
@@ -2061,6 +2121,8 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
             for account in self.selected_accounts:
                 if self._stop_requested:
                     break
+
+                bot_reporter.update_account(account)
 
                 if account in _EXCLUDED_ACCOUNTS:
                     _status("Skip", f"Skipping excluded account '{account}'")
@@ -2138,12 +2200,15 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
 
             if self._stop_requested:
                 self.status_update.emit("Stopped", "Capital Raid stopped by user")
+                bot_reporter.update_phase("Stopped", "Capital Raid stopped by user")
             else:
                 self.status_update.emit("Complete", "Capital Raid complete for all selected accounts")
+                bot_reporter.update_phase("Complete", "Capital Raid complete for all selected accounts")
 
         except Exception as exc:
             log(f"ClanCapitalWorker: Fatal error: {exc}")
             self.error_occurred.emit(str(exc))
+            bot_reporter.report_error(f"Capital Raid fatal error: {exc}")
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
@@ -2153,6 +2218,7 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
                     _kb.remove_hotkey("space")
                 except Exception:
                     pass
+            bot_reporter.stop()
             self.finished.emit()
 
 
@@ -2251,7 +2317,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
         )
         return bool(no_builders)
 
-    def _run_single_upgrade_battle(self, battle_index: int, target_account: str, behaviour: int) -> str:
+    def _run_single_upgrade_battle(self, battle_index: int, target_account: str, behaviour: int, account_attack_counts: dict, account_upgrade_counts: dict) -> str:
         """Run one full battle cycle (phases 1-3) then the appropriate Phase 5
         action based on *behaviour*.
 
@@ -2275,6 +2341,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
 
             self.overlay_draw.emit([], f"Upgrade Accounts — Battle {battle_index}: Entering battle")
             self.status_update.emit("Phase 1", "Entering battle...")
+            bot_reporter.update_phase("Phase 1", "Entering battle...")
             if not phase1_enter_battle(skip_account_check=False):
                 if self._stop_requested:
                     return "stop"
@@ -2288,6 +2355,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
 
             self.overlay_draw.emit([], f"Upgrade Accounts — Battle {battle_index}: Preparing")
             self.status_update.emit("Phase 2A", "Preparing battle...")
+            bot_reporter.update_phase("Phase 2A", "Preparing battle...")
             if not phase2_prepare():
                 if self._stop_requested:
                     return "stop"
@@ -2296,6 +2364,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
 
             self.overlay_draw.emit([], f"Upgrade Accounts — Battle {battle_index}: Deploying troops")
             self.status_update.emit("Phase 2B", "Deploying troops...")
+            bot_reporter.update_phase("Phase 2B", "Deploying troops...")
             if not phase2_execute():
                 if self._stop_requested:
                     return "stop"
@@ -2304,6 +2373,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
 
             self.overlay_draw.emit([], f"Upgrade Accounts — Battle {battle_index}: Waiting for return")
             self.status_update.emit("Phase 3", "Waiting for battle to end...")
+            bot_reporter.update_phase("Phase 3", "Waiting for battle to end...")
             if not phase3_wait_for_return():
                 if self._stop_requested:
                     return "stop"
@@ -2316,28 +2386,44 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             if account_name and snapshot:
                 update_account_stats(account_name, snapshot, battle_duration, walls_upgraded=0)
                 self.battle_completed.emit(account_name, snapshot, battle_duration, 0)
+                _gold = snapshot.get("gold", 0) if isinstance(snapshot, dict) else 0
+                _elixir = snapshot.get("elixir", 0) if isinstance(snapshot, dict) else 0
+                _dark = snapshot.get("dark_elixir", snapshot.get("dark", 0)) if isinstance(snapshot, dict) else 0
+                account_attack_counts[account_name] = account_attack_counts.get(account_name, 0) + 1
+                bot_reporter.report_battle_complete(account_name, _gold, _elixir, _dark, account_attack_counts[account_name])
 
             # Phase 5 — depends on per-account behaviour
             self.status_update.emit("Loading", "Waiting for Phase 5 to load...")
+            bot_reporter.update_phase("Loading", "Waiting for Phase 5 to load...")
             time.sleep(5)
 
             if behaviour == UPGRADE_BEHAVIOUR_FILL:
                 # No upgrades — just farming; switch condition checked by caller
                 self.status_update.emit("Phase 5", "Fill mode — no upgrades performed")
+                bot_reporter.update_phase("Phase 5", "Fill mode - no upgrades performed")
                 self.overlay_draw.emit([], f"Upgrade Accounts — Battle {battle_index} complete (fill)")
                 self.status_update.emit("Idle", f"Battle {battle_index} completed on '{target_account}' (fill)")
+                bot_reporter.update_phase("Idle", f"Battle {battle_index} completed on '{target_account}' (fill)")
                 time.sleep(2.0)
                 return "ok"
 
             elif behaviour == UPGRADE_BEHAVIOUR_UPGRADE:
                 self.overlay_draw.emit([], f"Upgrade Accounts — Battle {battle_index}: Upgrading account")
                 self.status_update.emit("Phase 5", "Upgrading account...")
+                bot_reporter.update_phase("Phase 5", "Upgrading account...")
                 phase5_found_something = upgrade_account()
+                if phase5_found_something:
+                    account_upgrade_counts[target_account] = account_upgrade_counts.get(target_account, 0) + 1
+                    bot_reporter.report_upgrade(target_account, "account upgrade", account_upgrade_counts[target_account])
 
             else:  # UPGRADE_BEHAVIOUR_RUSH
                 self.overlay_draw.emit([], f"Upgrade Accounts — Battle {battle_index}: Rush upgrading account")
                 self.status_update.emit("Phase 5", "Rush upgrading (storages → new buildings → Town Hall)...")
+                bot_reporter.update_phase("Phase 5", "Rush upgrading account...")
                 phase5_found_something = rush_upgrade_account()
+                if phase5_found_something:
+                    account_upgrade_counts[target_account] = account_upgrade_counts.get(target_account, 0) + 1
+                    bot_reporter.report_upgrade(target_account, "rush upgrade", account_upgrade_counts[target_account])
 
             disabled_acct = pop_gem_upgrades_disabled()
             if disabled_acct:
@@ -2345,17 +2431,22 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
 
             self.overlay_draw.emit([], f"Upgrade Accounts — Battle {battle_index} complete")
             self.status_update.emit("Idle", f"Battle {battle_index} completed on '{target_account}'")
+            bot_reporter.update_phase("Idle", f"Battle {battle_index} completed on '{target_account}'")
             time.sleep(2.0)
             return "ok" if phase5_found_something else "ok_nothing_upgraded"
 
         except Exception as exc:
             self.status_update.emit("Error", f"Error in upgrade battle {battle_index}: {exc}")
+            bot_reporter.report_error(f"Error in upgrade battle {battle_index}: {exc}")
             return "failed"
 
     # noinspection PyUnresolvedReferences
     def run(self):  # noqa: C901
         try:
+            bot_reporter.start()
             self.status_update.emit("Initializing", "Starting Upgrade Accounts automation...")
+            bot_reporter.update_phase("Initializing", "Starting Upgrade Accounts automation...")
+            bot_reporter.log("Upgrade Accounts automation started")
             self.overlay_draw.emit([], "Upgrade Accounts — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
@@ -2363,6 +2454,8 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             battle_count = 0
             account_index = 0
             consecutive_switch_failures = 0
+            account_attack_counts: dict = {}
+            account_upgrade_counts: dict = {}
 
             while not self._stop_requested:
                 target = self.selected_accounts[account_index % len(self.selected_accounts)]
@@ -2371,6 +2464,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
 
                 self.overlay_draw.emit([], f"Upgrade Accounts — Switching to '{target}'")
                 self.status_update.emit("Switch", f"Switching to account '{target}'...")
+                bot_reporter.update_phase("Switch", f"Switching to account '{target}'...")
                 switched = _switch_to_target_fill_account([target], hard_reset_fn=self._perform_hard_game_restart)
                 if not switched:
                     if self._stop_requested:
@@ -2381,9 +2475,11 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                         f"Failed to switch to '{target}', skipping... "
                         f"({consecutive_switch_failures}/{len(self.selected_accounts)} consecutive failures)"
                     )
+                    bot_reporter.report_error(f"Failed to switch to account '{target}'")
                     if consecutive_switch_failures >= len(self.selected_accounts):
                         consecutive_switch_failures = 0
                         self.status_update.emit("Recovery", "All accounts failed to switch — performing hard game restart...")
+                        bot_reporter.update_phase("Recovery", "All accounts failed to switch - performing hard game restart")
                         self._perform_hard_game_restart()
                     time.sleep(3)
                     continue
@@ -2391,6 +2487,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 consecutive_switch_failures = 0
 
                 self.account_detected.emit(switched)
+                bot_reporter.update_account(switched)
                 Autoclash._default_session.current_account_name = switched
 
                 target_settings = self._get_account_settings(switched).copy()
@@ -2407,6 +2504,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                     "Account",
                     f"Using '{switched}' — mode: {behaviour_labels.get(behaviour, '?')} (walls OFF)"
                 )
+                bot_reporter.update_phase("Account", f"Using '{switched}' — mode: {behaviour_labels.get(behaviour, '?')} (walls OFF)")
 
                 if not self._ensure_home_village_context(max_attempts=60):
                     if self._stop_requested:
@@ -2434,7 +2532,14 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 while not self._stop_requested:
                     battle_count += 1
                     self.status_update.emit("Battle", f"Starting upgrade battle {battle_count} on '{switched}'...")
-                    result = self._run_single_upgrade_battle(battle_count, switched, behaviour)
+                    bot_reporter.update_phase("Battle", f"Starting upgrade battle {battle_count} on '{switched}'...")
+                    result = self._run_single_upgrade_battle(
+                        battle_count,
+                        switched,
+                        behaviour,
+                        account_attack_counts,
+                        account_upgrade_counts,
+                    )
 
                     if result == "stop":
                         break
@@ -2479,13 +2584,16 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
 
             if self._stop_requested:
                 self.status_update.emit("Stopped", "Upgrade Accounts stopped by user")
+                bot_reporter.update_phase("Stopped", "Upgrade Accounts stopped by user")
 
         except Exception as exc:
             log(f"FATAL ERROR in upgrade accounts thread: {exc}")
             self.error_occurred.emit(str(exc))
+            bot_reporter.report_error(f"FATAL upgrade accounts worker error: {exc}")
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
+            bot_reporter.stop()
             self.finished.emit()
 
 
