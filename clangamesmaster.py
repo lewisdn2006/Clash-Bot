@@ -476,13 +476,17 @@ def run_master_bot(
     from Autoclash import (
         phase1_enter_battle, phase2_prepare, phase2_execute,
         phase3_wait_for_return, phase4_upgrade, upgrade_account, CONFIG,
+        LOOT_TRACKER, update_account_stats,
     )
+    import bot_reporter
 
     completed:          Set[str]            = set()
     last_trash_by_ingame: Dict[str, float]  = {}
     attack_idx = 0
     _switch_fail_count = 0
     _accounts = attack_accounts if attack_accounts is not None else ATTACK_ACCOUNTS
+    account_attack_counts: Dict[str, int] = {}
+    account_upgrade_counts: Dict[str, int] = {}
 
     # Disable the built-in per-attack clan games flow — we handle it ourselves
     _orig_cg_enabled = AC.CONFIG.get("clan_games_enabled", False)
@@ -590,6 +594,8 @@ def run_master_bot(
                     if stop_fn():
                         break
 
+                    battle_start = time.time()
+
                     status_fn("Phase 1", f"Entering battle on {current_account}…")
                     if not phase1_enter_battle(skip_account_check=False):
                         AC.log("CG Master: Phase 1 failed — retrying")
@@ -629,9 +635,47 @@ def run_master_bot(
                     if CONFIG.get("auto_upgrade_walls", True):
                         status_fn("Phase 4", "Upgrading walls…")
                         phase4_upgrade()
+                        walls_upgraded = int(getattr(AC._default_session, "walls_upgraded_this_battle", 0) or 0)
+                        if walls_upgraded:
+                            account_upgrade_counts[current_account] = account_upgrade_counts.get(current_account, 0) + walls_upgraded
+                            bot_reporter.report_upgrade(current_account, "walls", account_upgrade_counts[current_account])
                     if CONFIG.get("auto_upgrade_storages", True):
                         status_fn("Phase 5", "Upgrading account…")
-                        upgrade_account()
+                        if upgrade_account():
+                            account_upgrade_counts[current_account] = account_upgrade_counts.get(current_account, 0) + 1
+                            bot_reporter.report_upgrade(current_account, "account upgrade", account_upgrade_counts[current_account])
+
+                    battle_duration = time.time() - battle_start
+                    snapshot = getattr(LOOT_TRACKER, "last_snapshot", None)
+                    account_name = getattr(AC._default_session, "current_account_name", None) or current_account
+                    walls_upgraded = int(getattr(AC._default_session, "walls_upgraded_this_battle", 0) or 0)
+
+                    if snapshot:
+                        try:
+                            update_account_stats(account_name, snapshot, battle_duration, walls_upgraded)
+                            gold = snapshot.get("gold", 0) + snapshot.get("add_gold", 0)
+                            elixir = snapshot.get("elixir", 0) + snapshot.get("add_elixir", 0)
+                            dark = snapshot.get("dark_elixir", 0) + snapshot.get("add_dark", 0)
+                            account_attack_counts[account_name] = account_attack_counts.get(account_name, 0) + 1
+                            bot_reporter.report_battle_complete(
+                                account_name,
+                                int(gold),
+                                int(elixir),
+                                int(dark),
+                                account_attack_counts[account_name],
+                                walls=walls_upgraded,
+                                stars=int(snapshot.get("stars", 0) or 0),
+                            )
+                            AC.log(
+                                f"CG Master: Recorded battle for '{account_name}' "
+                                f"G:{int(gold):,} E:{int(elixir):,} D:{int(dark):,} "
+                                f"Stars:{int(snapshot.get('stars', 0) or 0)}"
+                            )
+                        except Exception as exc:
+                            AC.log(f"CG Master: Failed to record battle stats: {exc}")
+                            bot_reporter.report_error(f"Clan Games Master stats update failed: {exc}")
+                    else:
+                        AC.log("CG Master: No loot snapshot available after battle; stats/report skipped")
 
                     AC.log("CG Master: Attack complete — looping back to challenge check")
                     status_fn("Attacking", f"Attack done — checking next challenge on {current_account}…")
