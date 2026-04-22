@@ -1860,11 +1860,12 @@ class ClanGamesMasterWorker(QThread, _RecoveryMixin):
     error_occurred    = Signal(str)
     finished          = Signal()
 
-    def __init__(self, account_settings_getter, apply_settings_fn, parent=None):
+    def __init__(self, account_settings_getter, apply_settings_fn, selected_accounts=None, parent=None):
         super().__init__(parent)
         self._stop_requested = False
         self._get_account_settings = account_settings_getter
         self._apply_settings = apply_settings_fn
+        self._selected_accounts = selected_accounts
 
     def stop(self):
         self._stop_requested = True
@@ -1904,6 +1905,7 @@ class ClanGamesMasterWorker(QThread, _RecoveryMixin):
                 apply_settings_fn=apply_settings_fn,
                 overlay_fn=self.overlay_draw.emit,
                 hard_reset_fn=self._perform_hard_game_restart,
+                attack_accounts=self._selected_accounts,
             )
 
         except Exception as e:

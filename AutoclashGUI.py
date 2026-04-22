@@ -1495,6 +1495,60 @@ def _format_seconds(seconds: float) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Page 16 — Clan Games Account Selection
+# ═══════════════════════════════════════════════════════════════════════════
+
+class ClanGamesAccountSelectPage(QWidget):
+    def __init__(self, accounts: list, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        layout.addWidget(_title("Clan Games"))
+        layout.addWidget(_subtitle(
+            "Select accounts to include in the Clan Games Master Bot.\n"
+            "The bot will attack and complete challenges on each selected account."
+        ))
+
+        self.checkboxes: Dict[str, QCheckBox] = {}
+        grid = QGridLayout()
+        for i, name in enumerate(sorted(accounts)):
+            cb = QCheckBox(name)
+            self.checkboxes[name] = cb
+            grid.addWidget(cb, i // 2, i % 2)
+        layout.addLayout(grid)
+
+        self.select_all_btn = QPushButton("Select All")
+        self.select_all_btn.setFixedWidth(240)
+        self.select_all_btn.clicked.connect(self._toggle_all)
+        layout.addWidget(self.select_all_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.start_btn = QPushButton("Start Clan Games")
+        self.start_btn.setObjectName("primary_btn")
+        self.start_btn.setFixedWidth(240)
+        layout.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.back_btn = QPushButton("Back")
+        self.back_btn.setFixedWidth(240)
+        layout.addWidget(self.back_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        _page_lbl = QLabel("Page 16", self)
+        _page_lbl.setStyleSheet("color: #555; font-size: 9px;")
+        _page_lbl.adjustSize()
+        _page_lbl.move(5, 5)
+        _page_lbl.raise_()
+
+    def _toggle_all(self):
+        all_checked = all(cb.isChecked() for cb in self.checkboxes.values())
+        for cb in self.checkboxes.values():
+            cb.setChecked(not all_checked)
+        self.select_all_btn.setText("Deselect All" if not all_checked else "Select All")
+
+    def selected_accounts(self) -> List[str]:
+        return [name for name, cb in self.checkboxes.items() if cb.isChecked()]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Page 9 — Clan Games Progress
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1859,6 +1913,7 @@ class AutoclashGUI(QMainWindow):
     PAGE_CAPITAL_PROGRESS = 13
     PAGE_UPGRADE_ACCOUNTS = 14
     PAGE_MASS_CONFIG      = 15
+    PAGE_CLAN_GAMES_SELECT = 16
 
     # Default sizes per page (w, h)
     PAGE_SIZE = {
@@ -1878,6 +1933,7 @@ class AutoclashGUI(QMainWindow):
         PAGE_CAPITAL_PROGRESS: (700, 460),
         PAGE_UPGRADE_ACCOUNTS: (700, 500),
         PAGE_MASS_CONFIG:      (700, 750),
+        PAGE_CLAN_GAMES_SELECT: (700, 600),
     }
 
     def __init__(self):
@@ -1924,6 +1980,7 @@ class AutoclashGUI(QMainWindow):
         self.pg_capital_progress = ClanCapitalProgressPage()
         self.pg_upgrade_accounts = UpgradeAccountsPage()
         self.pg_mass_config = MassConfigurePage(self._account_names())
+        self.pg_clan_games_select = ClanGamesAccountSelectPage(account_list)
 
         # Overlay widget (separate top-level window, not in the stack)
         self._overlay = QtOverlayWidget()
@@ -1946,6 +2003,7 @@ class AutoclashGUI(QMainWindow):
             self.pg_capital_progress,
             self.pg_upgrade_accounts,
             self.pg_mass_config,
+            self.pg_clan_games_select,
         ):
             self.stack.addWidget(pg)
 
@@ -1953,7 +2011,7 @@ class AutoclashGUI(QMainWindow):
         # Village selection
         self.pg_village_sel.home_btn.clicked.connect(lambda: self._navigate(self.PAGE_HOME_CONFIG))
         self.pg_village_sel.bb_btn.clicked.connect(lambda: self._navigate(self.PAGE_BB_CONFIG))
-        self.pg_village_sel.clan_games_btn.clicked.connect(self._start_clan_games)
+        self.pg_village_sel.clan_games_btn.clicked.connect(lambda: self._navigate(self.PAGE_CLAN_GAMES_SELECT))
         self.pg_village_sel.clan_scout_btn.clicked.connect(self._start_clan_scouter)
         self.pg_village_sel.capital_raid_btn.clicked.connect(lambda: self._navigate(self.PAGE_CAPITAL_CONFIG))
         self.pg_village_sel.stats_btn.clicked.connect(self._show_stats)
@@ -2010,6 +2068,10 @@ class AutoclashGUI(QMainWindow):
         # Stats
         self.pg_stats.back_btn.clicked.connect(self._go_back)
         self.pg_stats.refresh_btn.clicked.connect(self.pg_stats.refresh)
+
+        # Clan Games account selection
+        self.pg_clan_games_select.start_btn.clicked.connect(self._start_clan_games)
+        self.pg_clan_games_select.back_btn.clicked.connect(self._go_back)
 
         # Clan Games progress
         self.pg_clan_games.stop_btn.clicked.connect(self._stop_clan_games)
@@ -2625,7 +2687,11 @@ class AutoclashGUI(QMainWindow):
     # ------------------------------------------------------------------
 
     def _start_clan_games(self):
-        log("GUI: Starting Clan Games Master Bot")
+        selected = self.pg_clan_games_select.selected_accounts()
+        if not selected:
+            QMessageBox.warning(self, "No Accounts Selected", "Please select at least one account.")
+            return
+        log(f"GUI: Starting Clan Games Master Bot — accounts: {', '.join(selected)}")
         self._cgm_completed: list = []
         self.pg_clan_games.mode_label.setText("—")
         self.pg_clan_games.account_label.setText("—")
@@ -2635,6 +2701,7 @@ class AutoclashGUI(QMainWindow):
         self.worker = ClanGamesMasterWorker(
             account_settings_getter=self._get_account_settings,
             apply_settings_fn=self._apply_settings_to_runtime,
+            selected_accounts=selected,
         )
         self.worker.status_update.connect(self._on_cg_status)
         self.worker.mode_changed.connect(self._on_cg_mode_changed)
