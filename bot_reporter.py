@@ -21,7 +21,7 @@ import requests
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
-WORKER_URL  = "https://bot.lewisdn.com/update"
+WORKER_URL  = "https://autoclash-monitor.lewisdn2006.workers.dev/update"
 BOT_SECRET  = "clash-monitor-lewis123"
 VERSION     = "2.0"
 FLUSH_INTERVAL = 10   # seconds — safe with D1 (100k writes/day free)
