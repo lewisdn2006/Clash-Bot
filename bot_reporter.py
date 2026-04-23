@@ -16,7 +16,7 @@ import uuid
 import requests
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
-WORKER_URL  = "https://autoclash-monitor.lewisdn2006.workers.dev/update"
+WORKER_URL  = "https://bot.lewisdn.com/update"
 BOT_SECRET  = "clash-monitor-lewis123"
 VERSION     = "2.0"
 FLUSH_INTERVAL = 10   # seconds — safe with D1 (100k writes/day free)
@@ -45,6 +45,11 @@ _running:       bool = False
 _thread:        threading.Thread | None = None
 _kv_limit_hit:  bool = False   # safety net — shouldn't fire with D1
 _account_totals: dict = {}  # {account_name: {gold, elixir, dark, attacks}}
+
+# Callbacks registered by the bot for each command type.
+# Keys: 'hard_reset' | 'pause' | 'resume' | 'stop'
+# Values: callable with no arguments
+_command_callbacks: dict = {}
 
 
 def _send(payload: dict) -> None:
@@ -76,10 +81,43 @@ def _send(payload: dict) -> None:
         print(f"[Reporter] Failed to send update: {exc}")
 
 
+def _poll_commands() -> None:
+    """Poll the worker for any pending dashboard commands and execute them."""
+    global _kv_limit_hit
+    if _kv_limit_hit:
+        return
+    try:
+        resp = requests.post(
+            WORKER_URL.replace('/update', '/api/poll-command'),
+            json={},
+            headers={
+                'Content-Type': 'application/json',
+                'X-Bot-Secret': BOT_SECRET,
+            },
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            command = data.get('command')
+            if command:
+                print(f'[Reporter] Dashboard command received: {command}')
+                cb = _command_callbacks.get(command)
+                if cb:
+                    try:
+                        cb()
+                    except Exception as exc:
+                        print(f'[Reporter] Command callback error for {command!r}: {exc}')
+                else:
+                    print(f'[Reporter] No callback registered for command: {command!r}')
+    except Exception as exc:
+        print(f'[Reporter] Poll command failed: {exc}')
+
+
 def _flush_worker() -> None:
     """Background thread — flushes the queue every FLUSH_INTERVAL seconds."""
     global _running
     last_flush: float = 0.0
+    last_poll: float = 0.0
     pending_log: str | None = None
     pending_battle: dict | None = None
 
@@ -113,6 +151,10 @@ def _flush_worker() -> None:
             _send(payload)
             last_flush = now
 
+        if now - last_poll >= 10:
+            _poll_commands()
+            last_poll = now
+
         time.sleep(1)
 
 
@@ -126,6 +168,7 @@ def start() -> None:
     _kv_limit_hit   = False
     _session_id     = str(uuid.uuid4())[:16]   # short unique session ID
     _account_totals = {}
+    _command_callbacks.clear()
     _running        = True
 
     # Signal session reset to the worker
@@ -141,6 +184,16 @@ def stop() -> None:
     global _running
     _running = False
     print("[Reporter] Stopped.")
+
+
+def register_command_callback(command: str, fn) -> None:
+    """Register a callback to be called when a dashboard command is received.
+
+    Example:
+        bot_reporter.register_command_callback('hard_reset', my_reset_fn)
+        bot_reporter.register_command_callback('pause', my_pause_fn)
+    """
+    _command_callbacks[command] = fn
 
 
 def update_phase(phase: str, message: str = "") -> None:

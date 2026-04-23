@@ -707,6 +707,11 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
             self.overlay_draw.emit([], "Home Village — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
+            import bot_reporter as _br
+            _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('pause', lambda: setattr(Autoclash._default_session, 'pause_requested', True))
+            _br.register_command_callback('resume', lambda: setattr(Autoclash._default_session, 'pause_requested', False))
+            _br.register_command_callback('stop', self.stop)
 
             num_runs = CONFIG.get("num_runs")
             infinite_mode = num_runs is None or num_runs <= 0
@@ -1023,6 +1028,11 @@ class FillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             self.overlay_draw.emit([], "Fill Accounts — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
+            import bot_reporter as _br
+            _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('pause', lambda: setattr(Autoclash._default_session, 'pause_requested', True))
+            _br.register_command_callback('resume', lambda: setattr(Autoclash._default_session, 'pause_requested', False))
+            _br.register_command_callback('stop', self.stop)
 
             battle_count = 0
 
@@ -1270,6 +1280,11 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             self.overlay_draw.emit([], "Cycle Accounts — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
+            import bot_reporter as _br
+            _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('pause', lambda: setattr(Autoclash._default_session, 'pause_requested', True))
+            _br.register_command_callback('resume', lambda: setattr(Autoclash._default_session, 'pause_requested', False))
+            _br.register_command_callback('stop', self.stop)
 
             battle_count = 0
             account_index = 0
@@ -1918,6 +1933,9 @@ class ClanGamesMasterWorker(QThread, _RecoveryMixin):
             bot_reporter.log("Clan Games Master Bot started")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
+            import bot_reporter as _br
+            _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('stop', self.stop)
 
             def status_fn(phase: str, message: str) -> None:
                 self.status_update.emit(phase, message)
