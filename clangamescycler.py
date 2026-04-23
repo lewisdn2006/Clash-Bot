@@ -897,20 +897,22 @@ def ensure_approved_account_with_fender_handling(max_attempts: int = 100) -> boo
         if name_norm == "fender":
             AC.log("Cycler: OCR found 'Fender' - attempting return-home recovery")
             home_attempt = 0
-            while True:
+            while home_attempt < 30:
                 home_attempt += 1
                 home_coords = AC.find_template("return_home.png")
                 if home_coords:
                     AC.log(
                         f"Cycler: Found 'return_home.png' at {home_coords} "
-                        f"(attempt {home_attempt}) - clicking"
+                        f"(attempt {home_attempt}/30) - clicking"
                     )
                     AC.click_with_jitter(*home_coords)
                     AC.random_delay()
                     time.sleep(1.0)
                     break
-                AC.log(f"Cycler: 'return_home.png' not found yet (attempt {home_attempt}) - retrying")
+                AC.log(f"Cycler: 'return_home.png' not found (attempt {home_attempt}/30)")
                 time.sleep(1.0)
+            else:
+                AC.log("Cycler: return_home.png not found after 30 attempts — giving up on Fender recovery")
 
             AC.log("Cycler: Return-home click complete - restarting account name search")
             time.sleep(1.0)

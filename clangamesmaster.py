@@ -539,6 +539,8 @@ def run_master_bot(
 
             AC.log(f"CG Master: Starting attack loop on '{current_account}'")
             status_fn("Attacking", f"Attacking on {current_account}…")
+            _stand_fail_count = 0
+            _phase1_fail_count = 0
 
             # -------------------------------------------------------------------
             # Attack loop for this account
@@ -551,6 +553,7 @@ def run_master_bot(
                     break
 
                 elif result == RESULT_COMPLETED:
+                    _stand_fail_count = 0
                     AC.log(f"CG Master: '{current_account}' reached ~7000 pts — marking completed")
                     status_fn("Completed", f"{current_account} completed — moving to next account")
                     completed.add(current_account)
@@ -559,8 +562,15 @@ def run_master_bot(
                     break  # exit attack loop → outer loop picks next account
 
                 elif result == RESULT_FAILED:
-                    AC.log("CG Master: Stand not found — retrying in 3s")
-                    status_fn("Retrying", "Stand not found — retrying…")
+                    _stand_fail_count += 1
+                    AC.log(f"CG Master: Stand not found — retrying in 3s (fail #{_stand_fail_count})")
+                    status_fn("Retrying", f"Stand not found — retrying… ({_stand_fail_count}/10)")
+                    if _stand_fail_count >= 10:
+                        _stand_fail_count = 0
+                        if hard_reset_fn:
+                            AC.log("CG Master: Stand not found 10 times — performing hard reset")
+                            status_fn("Recovery", "Stand not found 10 times — performing hard reset…")
+                            hard_reset_fn()
                     time.sleep(3.0)
 
                 elif result == RESULT_NO_VALID:
@@ -590,6 +600,7 @@ def run_master_bot(
                             apply_settings_fn(current_account)
 
                 elif result == RESULT_HAS_VALID:
+                    _stand_fail_count = 0
                     # Full attack sequence
                     if stop_fn():
                         break
@@ -598,10 +609,18 @@ def run_master_bot(
 
                     status_fn("Phase 1", f"Entering battle on {current_account}…")
                     if not phase1_enter_battle(skip_account_check=False):
-                        AC.log("CG Master: Phase 1 failed — retrying")
+                        _phase1_fail_count += 1
+                        AC.log(f"CG Master: Phase 1 failed — retrying (fail #{_phase1_fail_count})")
+                        if _phase1_fail_count >= 5:
+                            _phase1_fail_count = 0
+                            if hard_reset_fn:
+                                AC.log("CG Master: Phase 1 failed 5 times — performing hard reset")
+                                status_fn("Recovery", "Phase 1 failed 5 times — performing hard reset…")
+                                hard_reset_fn()
                         status_fn("Retrying", "Phase 1 failed — retrying…")
                         time.sleep(3.0)
                         continue
+                    _phase1_fail_count = 0
 
                     if stop_fn():
                         break
