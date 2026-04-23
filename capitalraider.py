@@ -86,6 +86,10 @@ TPL_WILLIAMLEEMING  = "williamleeming.png"
 # The account whose clan every other account should be in for capital raids
 CLAN_REFERENCE_ACCOUNT = "lewis3"
 
+# Tracks the number of district battles completed for the most recent account.
+# Read by ClanCapitalWorker after run_capital_raid_for_account() returns.
+_last_districts_count: int = 0
+
 # Coordinates for clan-join flow
 PROFILE_TAB_COORD:  Tuple[int, int] = (67,   52)
 SOCIAL_TAB_COORD:   Tuple[int, int] = (1510,  91)
@@ -765,6 +769,7 @@ def run_capital_raid_for_account(
         _status(status_fn, "Capital", "Could not reach raid map — aborting account")
         return "nav_failed"
 
+    global _last_districts_count
     battles_done = 0
     while not _stopped(stop_fn):
         result = attack_next_district(stop_fn, status_fn)
@@ -779,11 +784,13 @@ def run_capital_raid_for_account(
         if result == "clan_exhausted":
             _status(status_fn, "Capital", "Clan attacks exhausted — returning to home village")
             return_to_home_village(stop_fn, status_fn)
+            _last_districts_count = battles_done
             return "clan_exhausted"
 
         if result == "none_available":
             _status(status_fn, "Capital", f"No more districts — done ({battles_done} battles)")
             return_to_home_village(stop_fn, status_fn)
+            _last_districts_count = battles_done
             return "done"
 
         # result == "entered"

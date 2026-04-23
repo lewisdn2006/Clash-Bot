@@ -701,6 +701,7 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
     def run(self):  # noqa: C901
         try:
             bot_reporter.start()
+            bot_reporter.set_mode('home')
             self.status_update.emit("Initializing", "Starting automation...")
             bot_reporter.update_phase("Initializing", "Starting automation...")
             bot_reporter.log("Home Village automation started")
@@ -709,9 +710,6 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
             home_space_listener.start()
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
-            _br.register_command_callback('pause', lambda: setattr(Autoclash._default_session, 'pause_requested', True))
-            _br.register_command_callback('resume', lambda: setattr(Autoclash._default_session, 'pause_requested', False))
-            _br.register_command_callback('stop', self.stop)
 
             num_runs = CONFIG.get("num_runs")
             infinite_mode = num_runs is None or num_runs <= 0
@@ -1029,10 +1027,8 @@ class FillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
             import bot_reporter as _br
+            _br.set_mode('home')
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
-            _br.register_command_callback('pause', lambda: setattr(Autoclash._default_session, 'pause_requested', True))
-            _br.register_command_callback('resume', lambda: setattr(Autoclash._default_session, 'pause_requested', False))
-            _br.register_command_callback('stop', self.stop)
 
             battle_count = 0
 
@@ -1282,9 +1278,6 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             home_space_listener.start()
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
-            _br.register_command_callback('pause', lambda: setattr(Autoclash._default_session, 'pause_requested', True))
-            _br.register_command_callback('resume', lambda: setattr(Autoclash._default_session, 'pause_requested', False))
-            _br.register_command_callback('stop', self.stop)
 
             battle_count = 0
             account_index = 0
@@ -1410,6 +1403,7 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
     def run(self):
         try:
             bot_reporter.start()
+            bot_reporter.set_mode('bb')
             self.status_update.emit("Initializing", "Starting BB automation...")
             bot_reporter.update_phase("Initializing", "Starting BB automation...")
             bot_reporter.log("Builder Base automation started")
@@ -1456,6 +1450,7 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
                     Autoclash_BB.stats["battles_completed"] = battle_count
                     self._reset_failure_watchdog()
                     self.battle_completed.emit(battle_count, stars)
+                    bot_reporter.report_bb_battle(account_name='unknown', stars=int(stars))
                     self.overlay_draw.emit([], f"Builder Base — Battle {battle_count} complete  ({stars} stars)")
                     self.status_update.emit("Idle", f"BB Battle {battle_count} completed! Stars: {stars}")
                     bot_reporter.update_phase("Idle", f"BB battle {battle_count} completed ({stars} stars)")
@@ -1529,6 +1524,7 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
         original_thresh = Autoclash_BB.CONFIG.get("TEMPLATE_THRESH_DEFAULT", 0.85)
         try:
             bot_reporter.start()
+            bot_reporter.set_mode('bb')
             self.status_update.emit("Initializing", "Starting BB Fill Accounts automation...")
             bot_reporter.update_phase("Initializing", "Starting BB Fill Accounts automation...")
             bot_reporter.log("BB Fill Accounts automation started")
@@ -1627,6 +1623,7 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                     Autoclash_BB.stats["battles_completed"] = battle_count
                     self._reset_failure_watchdog()
                     self.battle_completed.emit(battle_count, stars)
+                    bot_reporter.report_bb_battle(account_name=target, stars=int(stars))
                     self.overlay_draw.emit([], f"BB Fill Accounts — Battle {battle_count} complete  ({stars} stars)")
                     self.status_update.emit("Idle", f"BB fill battle {battle_count} complete on '{target}'")
                     bot_reporter.update_phase("Idle", f"BB fill battle {battle_count} complete on '{target}'")
@@ -1929,13 +1926,13 @@ class ClanGamesMasterWorker(QThread, _RecoveryMixin):
     def run(self):
         try:
             bot_reporter.start()
+            bot_reporter.set_mode('home')
             bot_reporter.update_phase("Starting", "Clan Games Master Bot starting...")
             bot_reporter.log("Clan Games Master Bot started")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
-            _br.register_command_callback('stop', self.stop)
 
             def status_fn(phase: str, message: str) -> None:
                 self.status_update.emit(phase, message)
@@ -2115,6 +2112,7 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
         _keyboard_registered = False
         try:
             bot_reporter.start()
+            bot_reporter.set_mode('capital')
             bot_reporter.update_phase("Starting", "Capital Raid starting...")
             bot_reporter.log("Capital Raid automation started")
             try:
@@ -2208,6 +2206,13 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
                             break
                         continue
 
+                    if raid_result == "done":
+                        districts = getattr(capitalraider, '_last_districts_count', 1)
+                        bot_reporter.report_capital_battle(
+                            account_name=account,
+                            districts=districts,
+                            clan_name='',
+                        )
                     break  # "done", "nav_failed", or "stopped"
 
                 if not self._stop_requested and self._return_to_main_clan:

@@ -7,13 +7,18 @@ Key changes from KV edition:
   - session_id added so the worker can track separate sessions
   - report_battle_complete() now sends a 'battle' object for history storage
   - KV write-limit guard retained (as a safety net, though D1 won't hit it)
+  - verify=False on all requests to avoid SSL cert issues on the bot PC
 """
 
 import threading
 import queue
 import time
 import uuid
+import urllib3
 import requests
+
+# Suppress the SSL verification warning since we use verify=False
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 WORKER_URL  = "https://bot.lewisdn.com/update"
@@ -39,16 +44,17 @@ _session_data: dict = {
     "account_upgrades": 0,
     "log_message":     None,
     "version":         VERSION,
+    "mode":            "home",
 }
 
 _running:       bool = False
 _thread:        threading.Thread | None = None
 _kv_limit_hit:  bool = False   # safety net — shouldn't fire with D1
 _account_totals: dict = {}  # {account_name: {gold, elixir, dark, attacks}}
+_current_mode: str = 'home'  # 'home' | 'capital' | 'bb'
 
 # Callbacks registered by the bot for each command type.
-# Keys: 'hard_reset' | 'pause' | 'resume' | 'stop'
-# Values: callable with no arguments
+# Only 'hard_reset' is currently used — pause/resume/stop removed.
 _command_callbacks: dict = {}
 
 
@@ -67,6 +73,7 @@ def _send(payload: dict) -> None:
                 "X-Bot-Secret":  BOT_SECRET,
             },
             timeout=8,
+            verify=False,  # SSL cert on bot PC can't verify Cloudflare chain
         )
         if resp.status_code == 400 and "KV put() limit exceeded" in resp.text:
             _kv_limit_hit = True
@@ -95,6 +102,7 @@ def _poll_commands() -> None:
                 'X-Bot-Secret': BOT_SECRET,
             },
             timeout=5,
+            verify=False,  # SSL cert on bot PC can't verify Cloudflare chain
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -120,6 +128,8 @@ def _flush_worker() -> None:
     last_poll: float = 0.0
     pending_log: str | None = None
     pending_battle: dict | None = None
+    pending_capital_battle: dict | None = None
+    pending_bb_battle: dict | None = None
 
     while _running:
         # Drain the queue
@@ -130,10 +140,16 @@ def _flush_worker() -> None:
                     pending_log = item["log_message"]
                 if item.get("battle"):
                     pending_battle = item["battle"]
+                if item.get("capital_battle"):
+                    pending_capital_battle = item["capital_battle"]
+                if item.get("bb_battle"):
+                    pending_bb_battle = item["bb_battle"]
                 with _lock:
                     _session_data.update(
                         {k: v for k, v in item.items()
-                         if v is not None and k not in ("log_message", "battle")}
+                         if v is not None and k not in (
+                             "log_message", "battle", "capital_battle", "bb_battle"
+                         )}
                     )
         except queue.Empty:
             pass
@@ -142,12 +158,19 @@ def _flush_worker() -> None:
         if now - last_flush >= FLUSH_INTERVAL and not _kv_limit_hit:
             with _lock:
                 payload = dict(_session_data)
+            payload["mode"] = _current_mode
             if pending_log:
                 payload["log_message"] = pending_log
                 pending_log = None
             if pending_battle:
                 payload["battle"] = pending_battle
                 pending_battle = None
+            if pending_capital_battle:
+                payload["capital_battle"] = pending_capital_battle
+                pending_capital_battle = None
+            if pending_bb_battle:
+                payload["bb_battle"] = pending_bb_battle
+                pending_bb_battle = None
             _send(payload)
             last_flush = now
 
@@ -162,17 +185,18 @@ def _flush_worker() -> None:
 
 def start() -> None:
     """Start the reporter. Call once when the bot starts."""
-    global _running, _thread, _kv_limit_hit, _session_id, _account_totals
+    global _running, _thread, _kv_limit_hit, _session_id, _account_totals, _current_mode
     if _running:
         return
     _kv_limit_hit   = False
-    _session_id     = str(uuid.uuid4())[:16]   # short unique session ID
+    _session_id     = str(uuid.uuid4())[:16]
     _account_totals = {}
+    _current_mode   = 'home'
     _command_callbacks.clear()
     _running        = True
 
     # Signal session reset to the worker
-    _send({"reset_session": True, "version": VERSION})
+    _send({"reset_session": True, "version": VERSION, "mode": _current_mode})
 
     _thread = threading.Thread(target=_flush_worker, daemon=True)
     _thread.start()
@@ -188,12 +212,18 @@ def stop() -> None:
 
 def register_command_callback(command: str, fn) -> None:
     """Register a callback to be called when a dashboard command is received.
-
-    Example:
-        bot_reporter.register_command_callback('hard_reset', my_reset_fn)
-        bot_reporter.register_command_callback('pause', my_pause_fn)
+    Currently only 'hard_reset' is wired up.
     """
     _command_callbacks[command] = fn
+
+
+def set_mode(mode: str) -> None:
+    """Set the current bot mode. Call at the start of each worker.
+    mode: 'home' | 'capital' | 'bb'
+    """
+    global _current_mode
+    _current_mode = mode
+    _queue.put({"mode": mode})
 
 
 def update_phase(phase: str, message: str = "") -> None:
@@ -230,24 +260,20 @@ def log(message: str) -> None:
 
 
 def report_battle_complete(
-    account_name: str,
-    gold:         int,
-    elixir:       int,
-    dark:         int,
+    account_name:  str,
+    gold:          int,
+    elixir:        int,
+    dark:          int,
     total_attacks: int,
-    walls:        int = 0,
-    stars:        int = 0,
+    walls:         int = 0,
+    stars:         int = 0,
 ) -> None:
-    """
-    Call at the end of each battle.
-    Sends both the running account totals (for the live table)
-    AND a 'battle' object (for D1 history storage).
-    """
+    """Call at the end of each home village battle."""
     acc = _account_totals.setdefault(account_name, {'gold': 0, 'elixir': 0, 'dark': 0, 'attacks': 0})
-    acc['gold']    += gold
-    acc['elixir']  += elixir
-    acc['dark']    += dark
-    acc['attacks']  = total_attacks  # total_attacks is already cumulative from the caller
+    acc['gold']   += gold
+    acc['elixir'] += elixir
+    acc['dark']   += dark
+    acc['attacks'] = total_attacks
     update_account_stats(
         account_name=account_name,
         attacks=acc['attacks'],
@@ -255,7 +281,6 @@ def report_battle_complete(
         elixir=acc['elixir'],
         dark=acc['dark'],
     )
-    # Queue individual battle record for D1 history
     _queue.put({
         "battle": {
             "account":     account_name,
@@ -277,6 +302,36 @@ def report_upgrade(
     """Call after each upgrade."""
     update_account_stats(account_name=account_name, upgrades=total_upgrades)
     log(f"Upgrade: {upgrade_type} — {account_name} (total: {total_upgrades})")
+
+
+def report_capital_battle(
+    account_name: str,
+    districts:    int,
+    clan_name:    str = '',
+) -> None:
+    """Call after each clan capital account finishes raiding."""
+    _queue.put({
+        "capital_battle": {
+            "account":   account_name,
+            "districts": districts,
+            "clan_name": clan_name,
+        }
+    })
+    log(f"Capital raid — {account_name} | Districts: {districts} | Clan: {clan_name or 'unknown'}")
+
+
+def report_bb_battle(
+    account_name: str,
+    stars:        int,
+) -> None:
+    """Call after each Builder Base battle completes."""
+    _queue.put({
+        "bb_battle": {
+            "account": account_name,
+            "stars":   stars,
+        }
+    })
+    log(f"BB battle — {account_name} | Stars: {stars}")
 
 
 def report_error(message: str) -> None:
