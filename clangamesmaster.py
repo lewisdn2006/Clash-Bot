@@ -36,18 +36,36 @@ import pyautogui
 import Autoclash as AC
 import vision as _vision
 import clangamescycler as CGC
-# Import the single source-of-truth account name map
-from AutomationWorker import INGAME_TO_SWITCH_NAME as CG_MASTER_SWITCH_NAMES
+
 
 # ---------------------------------------------------------------------------
 # Account list
 # ---------------------------------------------------------------------------
 
-# ATTACK_ACCOUNTS and CG_MASTER_SWITCH_NAMES are no longer hardcoded here.
-# The account list comes from the GUI via attack_accounts parameter.
-# The switch name map is imported from AutomationWorker.INGAME_TO_SWITCH_NAME
-# so all accounts in the GUI are automatically supported.
-ATTACK_ACCOUNTS: List[str] = []  # fallback only — GUI always passes accounts
+# Account list — fallback only. The GUI always passes attack_accounts explicitly.
+ATTACK_ACCOUNTS: List[str] = []
+
+# Switch name map — maps internal account key to the display name shown in the
+# in-game account switch menu. Add any new accounts here alongside AutomationWorker.
+CG_MASTER_SWITCH_NAMES: Dict[str, str] = {
+    "lewis":          "CarefreeZenLewis",
+    "williamleeming": "HomelessLewis2",
+    "steve":          "BrokenSiennaa",
+    "lewis8":         "FreshLewis8",
+    "lewis7":         "CurlyLewis7",
+    "lewis6":         "WelcomedLewis6",
+    "lewis5":         "SincereLewis5",
+    "lewis4":         "IconLewis4",
+    "lewis3":         "TrustworthyLewis3",
+    "djbillgates22":  "DJBillGates22",
+    "djbillgates23":  "DJBillGates123",
+    "djbillgates24":  "DJBillGates24",
+    "djbillgates25":  "DJBillGates25",
+    "djbillgates26":  "DJBillGates26",
+    "djbillgates27":  "DJBillGates27",
+    "djbillgates28":  "DJBillGates28",
+    "djbillgates29":  "DJBillGates29",
+}
 
 # ---------------------------------------------------------------------------
 # Constants
