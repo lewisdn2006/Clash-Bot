@@ -294,6 +294,23 @@ def _switch_to_specific_account(
         return False
 
     candidate_map = {account_name: CG_MASTER_SWITCH_NAMES[account_name]}
+    # Wait for the home village to be fully loaded before opening the
+    # switch menu. This prevents the bot from failing immediately after
+    # a hard reset when the game is still on a loading/title screen.
+    AC.log("CG Master: Waiting for settings.png (game load check)…")
+    game_ready = False
+    for _load_attempt in range(60):
+        if stop_fn():
+            return False
+        if AC.find_template("settings.png"):
+            game_ready = True
+            break
+        time.sleep(1.0)
+    if not game_ready:
+        AC.log("CG Master: settings.png not found after 60s — game may not have loaded")
+        return False
+    AC.log("CG Master: Game ready — opening switch menu")
+
     CGC._open_account_switch_menu()
 
     def find_with_scroll(direction: str) -> dict:

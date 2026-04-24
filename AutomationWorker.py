@@ -553,7 +553,7 @@ class _RecoveryMixin:
         time.sleep(5)
         pyautogui.doubleClick(*HARD_RESET_RELAUNCH_COORD, interval=0.2)
         # Backup (old post-launch click): pyautogui.click(*HARD_RESET_POST_LAUNCH_COORD)
-        time.sleep(20)
+        time.sleep(45)  # Increased from 20s — PC needs more time to fully load CoC
         _click_confirm_if_present()
 
     def _handle_repeated_failure(self, failure_key: str, action_label: str = "Recovery") -> bool:
