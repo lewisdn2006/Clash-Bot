@@ -551,6 +551,8 @@ class _RecoveryMixin:
         pyautogui.hotkey('alt', 'f4')  # Close game window
         # Backup (old click-to-close): pyautogui.click(*HARD_RESET_CLOSE_COORD)
         time.sleep(5)
+        pyautogui.click(350, 400)  # Click desktop to ensure focus before relaunch
+        time.sleep(1)
         pyautogui.doubleClick(*HARD_RESET_RELAUNCH_COORD, interval=0.2)
         # Backup (old post-launch click): pyautogui.click(*HARD_RESET_POST_LAUNCH_COORD)
         time.sleep(45)  # Increased from 20s — PC needs more time to fully load CoC
