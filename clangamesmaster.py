@@ -36,30 +36,18 @@ import pyautogui
 import Autoclash as AC
 import vision as _vision
 import clangamescycler as CGC
+# Import the single source-of-truth account name map
+from AutomationWorker import INGAME_TO_SWITCH_NAME as CG_MASTER_SWITCH_NAMES
 
 # ---------------------------------------------------------------------------
 # Account list
 # ---------------------------------------------------------------------------
 
-ATTACK_ACCOUNTS: List[str] = [
-    "williamleeming",
-    "lewis3",
-    "lewis4",
-    "lewis5",
-    "lewis6",
-    "lewis7",
-    "lewis8",
-]
-
-CG_MASTER_SWITCH_NAMES: Dict[str, str] = {
-    "williamleeming": "HomelessLewis2",
-    "lewis3":         "TrustworthyLewis3",
-    "lewis4":         "IconLewis4",
-    "lewis5":         "SincereLewis5",
-    "lewis6":         "WelcomedLewis6",
-    "lewis7":         "CurlyLewis7",
-    "lewis8":         "FreshLewis8",
-}
+# ATTACK_ACCOUNTS and CG_MASTER_SWITCH_NAMES are no longer hardcoded here.
+# The account list comes from the GUI via attack_accounts parameter.
+# The switch name map is imported from AutomationWorker.INGAME_TO_SWITCH_NAME
+# so all accounts in the GUI are automatically supported.
+ATTACK_ACCOUNTS: List[str] = []  # fallback only — GUI always passes accounts
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -289,11 +277,11 @@ def _switch_to_specific_account(
     Draws the OCR match on the overlay so you can see exactly what was found.
     Returns True on success.
     """
-    if account_name not in CG_MASTER_SWITCH_NAMES:
-        AC.log(f"CG Master: '{account_name}' not in switch name map")
-        return False
-
-    candidate_map = {account_name: CG_MASTER_SWITCH_NAMES[account_name]}
+    # Look up the switch menu display name — fall back to account_name itself
+    # if not in the map (allows any account selected in the GUI to be used)
+    switch_display_name = CG_MASTER_SWITCH_NAMES.get(account_name, account_name)
+    AC.log(f"CG Master: Switching to '{account_name}' (switch name: '{switch_display_name}')")
+    candidate_map = {account_name: switch_display_name}
     # Wait for the home village to be fully loaded before opening the
     # switch menu. This prevents the bot from failing immediately after
     # a hard reset when the game is still on a loading/title screen.
