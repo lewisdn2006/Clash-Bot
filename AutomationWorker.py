@@ -305,8 +305,8 @@ def _match_visible_switch_accounts(candidates: Dict[str, str]) -> dict:
             if target_norm in row_norm or fragment_match:
                 conf = _normalize_ocr_confidence(float(row["conf"]))
                 log(f"SwitchOCR: '{row['text']}' matched '{switch_name}' conf={conf:.2f}")
-                if conf < 0.70:
-                    log(f"SwitchOCR: rejected — conf {conf:.2f} < 0.70")
+                if conf < 0.80:
+                    log(f"SwitchOCR: rejected — conf {conf:.2f} < 0.80")
                     continue
                 if conf > best_score:
                     best_row = row
@@ -2276,7 +2276,7 @@ ALL_APPROVED_ACCOUNTS: List[str] = sorted([
     "djbillgates22", "djbillgates23", "djbillgates24", "djbillgates25",
     "djbillgates26", "djbillgates27", "djbillgates28", "djbillgates29",
     "djbillgates30", "djbillgates31", "djbillgates32", "djbillgates33",
-    "djbillgates34", "djbillgates35", "djbillgates36", "djbillgates37",
+    "djbillgates34", "djbillgates35",
     "djbillgates38", "djbillgates39", "djbillgates40", "djbillgates41",
 ])
 

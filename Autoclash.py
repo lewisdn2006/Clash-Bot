@@ -597,7 +597,7 @@ class AutoLootTracker:
 # ACCOUNT STATS HELPERS
 # ================================
 
-APPROVED_ACCOUNTS = {"lewis", "williamleeming", "steve", "lewis8", "lewis7", "lewis6", "lewis5", "lewis4", "lewis3", "djbillgates22", "djbillgates23", "djbillgates24", "djbillgates25", "djbillgates26", "djbillgates27", "djbillgates28", "djbillgates29", "djbillgates30", "djbillgates31", "djbillgates32", "djbillgates33", "djbillgates34", "djbillgates35", "djbillgates36", "djbillgates37", "djbillgates38", "djbillgates39", "djbillgates40", "djbillgates41"}
+APPROVED_ACCOUNTS = {"lewis", "williamleeming", "steve", "lewis8", "lewis7", "lewis6", "lewis5", "lewis4", "lewis3", "djbillgates22", "djbillgates23", "djbillgates24", "djbillgates25", "djbillgates26", "djbillgates27", "djbillgates28", "djbillgates29", "djbillgates30", "djbillgates31", "djbillgates32", "djbillgates33", "djbillgates34", "djbillgates35", "djbillgates38", "djbillgates39", "djbillgates40", "djbillgates41"}
 ACCOUNT_NAME_BOX = (111, 13, 289, 41)  # (x1, y1, x2, y2) top-left name area
 
 
