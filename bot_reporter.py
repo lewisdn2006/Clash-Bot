@@ -47,6 +47,9 @@ _session_data: dict = {
     "mode":            "home",
 }
 
+_verbose_log_buffer: list = []
+_verbose_log_lock = threading.Lock()
+
 _running:       bool = False
 _thread:        threading.Thread | None = None
 _kv_limit_hit:  bool = False   # safety net — shouldn't fire with D1
@@ -171,6 +174,10 @@ def _flush_worker() -> None:
             if pending_bb_battle:
                 payload["bb_battle"] = pending_bb_battle
                 pending_bb_battle = None
+            with _verbose_log_lock:
+                if _verbose_log_buffer:
+                    payload["verbose_log_batch"] = list(_verbose_log_buffer)
+                    _verbose_log_buffer.clear()
             _send(payload)
             last_flush = now
 
@@ -257,6 +264,17 @@ def update_account_stats(
 def log(message: str) -> None:
     """Send a key log message to the dashboard (don't call for every line)."""
     _queue.put({"log_message": message})
+    verbose_log(message)
+
+
+def verbose_log(message: str) -> None:
+    """Buffer a verbose log line to be sent to the dashboard in the next flush.
+    Lines accumulate locally and are sent as a batch every FLUSH_INTERVAL seconds.
+    Only visible to authenticated users on the dashboard.
+    """
+    timestamp = time.strftime("%H:%M:%S")
+    with _verbose_log_lock:
+        _verbose_log_buffer.append(f"[{timestamp}] {message}")
 
 
 def report_battle_complete(
