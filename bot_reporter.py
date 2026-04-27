@@ -61,6 +61,31 @@ _current_mode: str = 'home'  # 'home' | 'capital' | 'bb'
 _command_callbacks: dict = {}
 
 
+class _VerboseStream:
+    """Wraps sys.stdout so that every print() call also feeds into verbose_log.
+    Writes are forwarded to the original stdout so the terminal still works normally.
+    """
+    def __init__(self, original_stdout):
+        self._original = original_stdout
+        self._buffer = ""
+
+    def write(self, text: str):
+        self._original.write(text)
+        # Buffer until we have a complete line (ends with newline)
+        self._buffer += text
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            line = line.rstrip("\r")
+            if line:  # ignore blank lines
+                verbose_log(line)
+
+    def flush(self):
+        self._original.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._original, name)
+
+
 def _send(payload: dict) -> None:
     """POST a single payload to the Cloudflare Worker."""
     global _kv_limit_hit
@@ -207,6 +232,12 @@ def start() -> None:
 
     _thread = threading.Thread(target=_flush_worker, daemon=True)
     _thread.start()
+
+    # Redirect stdout so every print() anywhere in the codebase feeds verbose_log
+    import sys
+    if not isinstance(sys.stdout, _VerboseStream):
+        sys.stdout = _VerboseStream(sys.stdout)
+
     print(f"[Reporter] Started — session {_session_id}")
 
 
