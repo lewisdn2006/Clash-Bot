@@ -335,6 +335,16 @@ def _match_visible_switch_accounts(candidates: Dict[str, str]) -> dict:
 
 def _ensure_settings_visible(hard_reset_fn=None) -> bool:
     """Confirm settings.png is on screen before opening the switch menu."""
+    import os, datetime
+    _dbg_dir = r"C:\Users\fghgh\Desktop\Clash Bot\debug_screenshots"
+    os.makedirs(_dbg_dir, exist_ok=True)
+    _ts = datetime.datetime.now().strftime("%H%M%S")
+    try:
+        _vision.safe_screenshot().save(os.path.join(_dbg_dir, f"{_ts}_before_settings_check.png"))
+        log(f"DEBUG: saved {_ts}_before_settings_check.png")
+    except Exception as _e:
+        log(f"DEBUG: screenshot failed — {_e}")
+
     max_attempts = 10
     for attempt in range(1, max_attempts + 1):
         coords = Autoclash.find_template("settings.png")
@@ -344,6 +354,12 @@ def _ensure_settings_visible(hard_reset_fn=None) -> bool:
         log(f"SwitchAcct: settings.png not found (attempt {attempt}/{max_attempts}) — waiting 5s")
         _worker_pauseable_sleep(5.0)
     log("SwitchAcct: settings.png not found after 10 attempts — triggering hard reset")
+    try:
+        _ts2 = datetime.datetime.now().strftime("%H%M%S")
+        _vision.safe_screenshot().save(os.path.join(_dbg_dir, f"{_ts2}_settings_all_failed.png"))
+        log(f"DEBUG: saved {_ts2}_settings_all_failed.png")
+    except Exception as _e:
+        log(f"DEBUG: screenshot failed — {_e}")
     if hard_reset_fn is not None:
         hard_reset_fn()
     return False
@@ -578,6 +594,15 @@ class _RecoveryMixin:
         log("HardReset: 45s wait complete — checking for confirm popup")
         found_confirm = _click_confirm_if_present()
         log(f"HardReset: confirm popup {'found and clicked' if found_confirm else 'not found'} — hard reset complete")
+        try:
+            import os, datetime
+            _dbg_dir = r"C:\Users\fghgh\Desktop\Clash Bot\debug_screenshots"
+            os.makedirs(_dbg_dir, exist_ok=True)
+            _ts = datetime.datetime.now().strftime("%H%M%S")
+            _vision.safe_screenshot().save(os.path.join(_dbg_dir, f"{_ts}_after_hard_reset.png"))
+            log(f"HardReset: saved post-reset screenshot {_ts}_after_hard_reset.png")
+        except Exception as _e:
+            log(f"HardReset: screenshot save failed — {_e}")
 
     def _handle_repeated_failure(self, failure_key: str, action_label: str = "Recovery") -> bool:
         count = self._register_failure(failure_key)
