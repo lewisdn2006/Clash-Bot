@@ -305,7 +305,13 @@ def _match_visible_switch_accounts(candidates: Dict[str, str]) -> dict:
             if target_norm in row_norm or fragment_match:
                 conf = _normalize_ocr_confidence(float(row["conf"]))
                 log(f"SwitchOCR: '{row['text']}' matched '{switch_name}' conf={conf:.2f}")
-                if conf < 0.80:
+                # If the OCR text is an exact normalised match, bypass the confidence
+                # threshold entirely — a perfect string match is unambiguous regardless
+                # of how confident Tesseract was about individual characters.
+                exact_match = (row_norm == target_norm)
+                if exact_match:
+                    log(f"SwitchOCR: exact match — bypassing confidence threshold")
+                elif conf < 0.80:
                     log(f"SwitchOCR: rejected — conf {conf:.2f} < 0.80")
                     continue
                 if conf > best_score:
