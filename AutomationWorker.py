@@ -334,13 +334,12 @@ def _match_visible_switch_accounts(candidates: Dict[str, str]) -> dict:
 
 
 def _ensure_settings_visible(hard_reset_fn=None) -> bool:
-    """Confirm settings.png is on screen before opening the switch menu.
-    Retries up to 10 times with a 5-second pause between attempts.
-    Calls hard_reset_fn (if provided) and returns False after all retries fail.
-    """
+    """Confirm settings.png is on screen before opening the switch menu."""
     max_attempts = 10
     for attempt in range(1, max_attempts + 1):
-        if Autoclash.find_template("settings.png"):
+        coords = Autoclash.find_template("settings.png")
+        if coords:
+            log(f"SwitchAcct: settings.png found at {coords} (attempt {attempt}/{max_attempts})")
             return True
         log(f"SwitchAcct: settings.png not found (attempt {attempt}/{max_attempts}) — waiting 5s")
         _worker_pauseable_sleep(5.0)
@@ -351,12 +350,15 @@ def _ensure_settings_visible(hard_reset_fn=None) -> bool:
 
 
 def _open_account_switch_menu():
+    log(f"SwitchMenu: clicking settings icon at {SETTINGS_MENU_COORD}")
     Autoclash.click_with_jitter(*SETTINGS_MENU_COORD)
     Autoclash.random_delay()
-    _worker_pauseable_sleep(1.0)
+    _worker_pauseable_sleep(3.0)
+    log(f"SwitchMenu: clicking account switch button at {ACCOUNT_SWITCH_MENU_COORD}")
     Autoclash.click_with_jitter(*ACCOUNT_SWITCH_MENU_COORD)
     Autoclash.random_delay()
-    _worker_pauseable_sleep(1.0)
+    _worker_pauseable_sleep(3.0)
+    log("SwitchMenu: account switch menu should now be open")
 
 
 def _scroll_switch_box_once(direction: str = "down"):
@@ -389,13 +391,16 @@ def _click_confirm_if_present() -> bool:
     """Check for confirm.png and click it if found (e.g. post-login or post-restart dialogs)."""
     coords = Autoclash.find_template("confirm.png")
     if coords:
+        log(f"Confirm: found confirm.png at {coords} — clicking")
         Autoclash.click_with_jitter(*coords)
         Autoclash.random_delay()
         return True
+    log("Confirm: confirm.png not found")
     return False
 
 
 def _ensure_approved_account_with_return_home(max_attempts: int = 100, stop_fn=None) -> Optional[str]:
+    log(f"AccountCheck: starting — will check up to {max_attempts} times")
     for attempt in range(1, max_attempts + 1):
         if stop_fn is not None and stop_fn():
             return None
@@ -414,10 +419,13 @@ def _ensure_approved_account_with_return_home(max_attempts: int = 100, stop_fn=N
                     return None
                 home_coords = Autoclash.find_template("return_home.png")
                 if home_coords:
+                    log(f"AccountCheck: return_home.png found at {home_coords} — clicking to return")
                     Autoclash.click_with_jitter(*home_coords)
                     Autoclash.random_delay()
                     _worker_pauseable_sleep(1.0)
                     break
+                else:
+                    log("AccountCheck: return_home.png not found on this attempt")
                 _worker_pauseable_sleep(1.0)
             continue
 
@@ -554,15 +562,22 @@ class _RecoveryMixin:
 
     def _perform_hard_game_restart(self):
         self.status_update.emit("Recovery", "No known error popup found. Performing hard game restart...")
+        log("HardReset: starting — sending Alt+F4 to close game window")
         pyautogui.hotkey('alt', 'f4')  # Close game window
         # Backup (old click-to-close): pyautogui.click(*HARD_RESET_CLOSE_COORD)
+        log("HardReset: Alt+F4 sent — waiting 5s for process to close")
         time.sleep(5)
+        log("HardReset: clicking desktop at (350, 400) to ensure focus")
         pyautogui.click(350, 400)  # Click desktop to ensure focus before relaunch
         time.sleep(1)
+        log(f"HardReset: double-clicking relaunch coord {HARD_RESET_RELAUNCH_COORD}")
         pyautogui.doubleClick(*HARD_RESET_RELAUNCH_COORD, interval=0.2)
         # Backup (old post-launch click): pyautogui.click(*HARD_RESET_POST_LAUNCH_COORD)
+        log("HardReset: relaunch clicked — waiting 45s for game to load")
         time.sleep(45)  # Increased from 20s — PC needs more time to fully load CoC
-        _click_confirm_if_present()
+        log("HardReset: 45s wait complete — checking for confirm popup")
+        found_confirm = _click_confirm_if_present()
+        log(f"HardReset: confirm popup {'found and clicked' if found_confirm else 'not found'} — hard reset complete")
 
     def _handle_repeated_failure(self, failure_key: str, action_label: str = "Recovery") -> bool:
         count = self._register_failure(failure_key)
@@ -1323,6 +1338,7 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                         bot_reporter.update_phase("Recovery", "All accounts failed to switch — performing hard game restart...")
                         bot_reporter.log("All accounts failed to switch — performing hard game restart")
                         self._perform_hard_game_restart()
+                        log("CycleAccounts: hard reset after all-accounts-failure complete — resuming loop")
                     time.sleep(3)
                     continue
 
@@ -2512,6 +2528,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                         self.status_update.emit("Recovery", "All accounts failed to switch — performing hard game restart...")
                         bot_reporter.update_phase("Recovery", "All accounts failed to switch - performing hard game restart")
                         self._perform_hard_game_restart()
+                        log("CycleAccounts: hard reset after all-accounts-failure complete — resuming loop")
                     time.sleep(3)
                     continue
 
