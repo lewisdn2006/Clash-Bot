@@ -16,6 +16,8 @@ import time
 import uuid
 import urllib3
 import requests
+import base64
+from io import BytesIO
 
 # Suppress the SSL verification warning since we use verify=False
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -136,15 +138,17 @@ def _poll_commands() -> None:
             data = resp.json()
             command = data.get('command')
             if command:
-                print(f'[Reporter] Dashboard command received: {command}')
+                print(f'[Reporter] Dashboard command received: {command!r} (id={data.get("id","?")} issued={data.get("issued_at","?")})')
                 cb = _command_callbacks.get(command)
                 if cb:
                     try:
                         cb()
                     except Exception as exc:
-                        print(f'[Reporter] Command callback error for {command!r}: {exc}')
+                        print(f'[Reporter] Command callback ERROR for {command!r}: {exc}')
+                        import traceback
+                        traceback.print_exc()
                 else:
-                    print(f'[Reporter] No callback registered for command: {command!r}')
+                    print(f'[Reporter] WARNING — no callback registered for {command!r}. Registered: {list(_command_callbacks.keys())}')
     except Exception as exc:
         print(f'[Reporter] Poll command failed: {exc}')
 
@@ -296,6 +300,29 @@ def log(message: str) -> None:
     """Send a key log message to the dashboard (don't call for every line)."""
     _queue.put({"log_message": message})
     verbose_log(message)
+
+
+def send_screenshot() -> None:
+    """Take a screenshot, compress it as JPEG, and send to dashboard.
+    Called when the dashboard 'screenshot' command is received.
+    Only sends if the reporter is running.
+    """
+    if not _running:
+        return
+    try:
+        import vision as _vision
+        from PIL import Image
+        img = _vision.safe_screenshot()
+        # Resize to half resolution to keep payload small
+        w, h = img.size
+        img = img.resize((w // 2, h // 2), Image.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format='JPEG', quality=55, optimize=True)
+        b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        print(f'[Reporter] Sending screenshot ({len(b64)//1024}KB)')
+        _send({'screenshot_data': b64})
+    except Exception as e:
+        print(f'[Reporter] Screenshot failed: {e}')
 
 
 def verbose_log(message: str) -> None:

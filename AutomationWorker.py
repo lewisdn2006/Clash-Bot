@@ -456,6 +456,13 @@ def _switch_to_target_fill_account(candidate_accounts: List[str], hard_reset_fn=
     if not candidate_accounts:
         return None
 
+    # Close any menus that may have been left open by a previous failed attempt
+    log("SwitchAcct: pressing Escape to close any open menus before starting")
+    pyautogui.press('escape')
+    time.sleep(0.5)
+    pyautogui.press('escape')
+    time.sleep(0.5)
+
     if not _ensure_settings_visible(hard_reset_fn):
         return None
 
@@ -527,6 +534,28 @@ def _switch_to_target_fill_account(candidate_accounts: List[str], hard_reset_fn=
             log(f"SwitchAcct: OCR name '{confirmed}' mapped to account key '{mapped_key}'")
             return mapped_key
     return None
+
+
+def _cmd_pause() -> None:
+    """Pause the bot — same effect as pressing SPACE."""
+    import Autoclash as _ac
+    sess = _ac._default_session
+    if not sess.pause_requested:
+        sess.pause_requested = True
+        _ac.log("⏸  PAUSED via dashboard command")
+    else:
+        _ac.log("[Reporter] pause command received but bot is already paused")
+
+
+def _cmd_resume() -> None:
+    """Resume the bot — same effect as pressing SPACE to unpause."""
+    import Autoclash as _ac
+    sess = _ac._default_session
+    if sess.pause_requested:
+        sess.pause_requested = False
+        _ac.log("▶  RESUMED via dashboard command")
+    else:
+        _ac.log("[Reporter] resume command received but bot is not paused")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -758,6 +787,10 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
             home_space_listener.start()
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('pause',      _cmd_pause)
+            _br.register_command_callback('resume',     _cmd_resume)
+            _br.register_command_callback('stop',       lambda: self.stop())
+            _br.register_command_callback('screenshot', bot_reporter.send_screenshot)
 
             num_runs = CONFIG.get("num_runs")
             infinite_mode = num_runs is None or num_runs <= 0
@@ -1077,6 +1110,10 @@ class FillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             import bot_reporter as _br
             _br.set_mode('home')
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('pause',      _cmd_pause)
+            _br.register_command_callback('resume',     _cmd_resume)
+            _br.register_command_callback('stop',       lambda: self.stop())
+            _br.register_command_callback('screenshot', bot_reporter.send_screenshot)
 
             battle_count = 0
 
@@ -1326,6 +1363,10 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             home_space_listener.start()
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('pause',      _cmd_pause)
+            _br.register_command_callback('resume',     _cmd_resume)
+            _br.register_command_callback('stop',       lambda: self.stop())
+            _br.register_command_callback('screenshot', bot_reporter.send_screenshot)
 
             battle_count = 0
             account_index = 0
@@ -1982,6 +2023,10 @@ class ClanGamesMasterWorker(QThread, _RecoveryMixin):
             home_space_listener.start()
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('pause',      _cmd_pause)
+            _br.register_command_callback('resume',     _cmd_resume)
+            _br.register_command_callback('stop',       lambda: self.stop())
+            _br.register_command_callback('screenshot', bot_reporter.send_screenshot)
 
             def status_fn(phase: str, message: str) -> None:
                 self.status_update.emit(phase, message)
