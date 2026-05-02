@@ -927,12 +927,13 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
                         self.overlay_draw.emit([], f"Home Village — Battle {run_count}: Upgrading account")
                         self.status_update.emit("Phase 5", "Upgrading account...")
                         bot_reporter.update_phase("Phase 5", "Upgrading account...")
-                        upgrade_account()
-                        total_upgrades += 1
-                        bot_reporter.report_upgrade(
-                            Autoclash._default_session.current_account_name or detected,
-                            "account upgrade", total_upgrades,
-                        )
+                        _did_upgrade = upgrade_account()
+                        if _did_upgrade:
+                            total_upgrades += 1
+                            bot_reporter.report_upgrade(
+                                Autoclash._default_session.current_account_name or detected,
+                                "account upgrade", total_upgrades,
+                            )
                     else:
                         self.status_update.emit("Phase 5", "Phase 5 skipped (auto upgrade storages disabled)")
                         bot_reporter.update_phase("Phase 5", "Phase 5 skipped (auto upgrade storages disabled)")
@@ -1319,10 +1320,11 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 self.overlay_draw.emit([], f"Cycle Accounts — Battle {battle_index}: Upgrading account")
                 self.status_update.emit("Phase 5", "Upgrading account...")
                 bot_reporter.update_phase("Phase 5", "Upgrading account...")
-                upgrade_account()
-                _upg_acct = Autoclash._default_session.current_account_name or target_account
-                account_upgrade_counts[_upg_acct] = account_upgrade_counts.get(_upg_acct, 0) + 1
-                bot_reporter.report_upgrade(_upg_acct, "account upgrade", account_upgrade_counts[_upg_acct])
+                _did_upgrade = upgrade_account()
+                if _did_upgrade:
+                    _upg_acct = Autoclash._default_session.current_account_name or target_account
+                    account_upgrade_counts[_upg_acct] = account_upgrade_counts.get(_upg_acct, 0) + 1
+                    bot_reporter.report_upgrade(_upg_acct, "account upgrade", account_upgrade_counts[_upg_acct])
             else:
                 self.status_update.emit("Phase 5", "Phase 5 skipped (auto upgrade storages disabled)")
                 bot_reporter.update_phase("Phase 5", "Phase 5 skipped (auto upgrade storages disabled)")
