@@ -156,7 +156,7 @@ CONFIG = {
     "drag_button": "drag_button.png",
     "azdrag_button": "Azdrag.png",
     "barb_button": "barb_button.png",
-    "event_troop_button": "edrag_button.png",
+    "event_troop_button": "gold_drag_icon.png",
     "return_button": "return_button.png",
     "claim_reward_button": "claim_reward_button.png",
     "try_again_button": "try_again_button.png",
@@ -256,7 +256,7 @@ CONFIG = {
     
     # Event and Siege Machine features
     "event_active": False,  # Set to True to place event dragons
-    "event_troop_count": 30,
+    "event_troop_count": 20,
     "siege_machine_active": False,  # Set to True to place siege machine
     
     # Time to wait (in seconds) after placing all heroes before activating their abilities
