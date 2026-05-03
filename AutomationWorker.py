@@ -767,6 +767,7 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
     def __init__(self, account_settings_getter, apply_settings_fn, parent=None):
         super().__init__(parent)
         self._stop_requested = False
+        Autoclash._default_session.stop_requested = False
         self._get_account_settings = account_settings_getter
         self._apply_settings = apply_settings_fn
 
@@ -1024,6 +1025,7 @@ class FillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
     ):
         super().__init__(parent)
         self._stop_requested = False
+        Autoclash._default_session.stop_requested = False
         self.selected_accounts = list(selected_accounts)
         self.completed_accounts: Set[str] = set()
         self._get_account_settings = account_settings_getter
@@ -1216,6 +1218,7 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
     ):
         super().__init__(parent)
         self._stop_requested = False
+        Autoclash._default_session.stop_requested = False
         self.selected_accounts = list(selected_accounts)
         self.attacks_per_account = attacks_per_account
         self._get_account_settings = account_settings_getter
@@ -1487,6 +1490,7 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._stop_requested = False
+        Autoclash._default_session.stop_requested = False
 
     def stop(self):
         self._stop_requested = True
@@ -1597,6 +1601,7 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
     def __init__(self, selected_accounts: List[str], parent=None):
         super().__init__(parent)
         self._stop_requested = False
+        Autoclash._default_session.stop_requested = False
         self.selected_accounts = list(selected_accounts)
         self.completed_accounts: Set[str] = set()
 
@@ -1765,6 +1770,7 @@ class ClanGamesWorker(QThread):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._stop_requested = False
+        Autoclash._default_session.stop_requested = False
 
     def stop(self):
         self._stop_requested = True
@@ -2004,6 +2010,7 @@ class ClanGamesMasterWorker(QThread, _RecoveryMixin):
     def __init__(self, account_settings_getter, apply_settings_fn, selected_accounts=None, parent=None):
         super().__init__(parent)
         self._stop_requested = False
+        Autoclash._default_session.stop_requested = False
         self._get_account_settings = account_settings_getter
         self._apply_settings = apply_settings_fn
         self._selected_accounts = selected_accounts
@@ -2102,6 +2109,7 @@ class ClanScouterWorker(QThread):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._stop_requested = False
+        Autoclash._default_session.stop_requested = False
 
     def stop(self):
         self._stop_requested = True
@@ -2194,6 +2202,7 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
     ):
         super().__init__(parent)
         self._stop_requested = False
+        Autoclash._default_session.stop_requested = False
         self.selected_accounts = list(selected_accounts)
         self._get_account_settings = account_settings_getter
         self._apply_settings = apply_settings_fn
@@ -2413,6 +2422,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
     ):
         super().__init__(parent)
         self._stop_requested = False
+        Autoclash._default_session.stop_requested = False
         self.account_behaviours: Dict[str, int] = dict(account_behaviours)
         self.selected_accounts: List[str] = list(account_behaviours.keys())
         self._get_account_settings = account_settings_getter

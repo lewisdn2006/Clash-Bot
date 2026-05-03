@@ -1842,7 +1842,7 @@ class HomeBattleSession:
             pyautogui.hotkey('alt', 'f4')  # Close game window
             # Backup (old click-to-close): pyautogui.click(1859, 16)
             time.sleep(5)
-            pyautogui.doubleClick(340, 160, interval=0.2)  # Relaunch game
+            pyautogui.doubleClick(20, 20, interval=0.2)  # Relaunch game
             # Backup (old post-launch click): pyautogui.click(1517, 148)
             time.sleep(20)
             log("Hard game restart complete - retrying account check...")
@@ -3431,6 +3431,17 @@ class HomeBattleSession:
                 else:
                     log(f"Loot too low ({loot_amount:,} < {min_loot:,}) - skipping this battle")
 
+                # Adaptive loot floor — halve min_loot after 10 consecutive skips
+                if CONFIG.get("dynamic_loot", False):
+                    global _consecutive_loot_skips
+                    _consecutive_loot_skips += 1
+                    log(f"[AdaptiveLoot] Consecutive skips: {_consecutive_loot_skips}/10  |  current floor: {CONFIG['min_loot_amount']:,}")
+                    if _consecutive_loot_skips >= 10:
+                        old_floor = CONFIG["min_loot_amount"]
+                        CONFIG["min_loot_amount"] = int(old_floor * 0.5)
+                        _consecutive_loot_skips = 0
+                        log(f"[AdaptiveLoot] 10 skips reached — reducing min loot: {old_floor:,} → {CONFIG['min_loot_amount']:,}")
+
                 # Click skip button at (1788, 819)
                 log("Clicking skip button at (1788, 819)...")
                 click_with_jitter(1788, 819)
@@ -3440,6 +3451,18 @@ class HomeBattleSession:
 
             # Loot is acceptable, continue with battle
             log(f"Loot acceptable ({loot_amount:,} >= {min_loot:,}) - proceeding with battle")
+
+            # Adaptive loot floor — reset skip counter on any accepted battle,
+            # and raise the floor if loot is more than 2x the current floor
+            if CONFIG.get("dynamic_loot", False):
+                global _consecutive_loot_skips
+                _consecutive_loot_skips = 0
+                if loot_amount > 2 * CONFIG["min_loot_amount"]:
+                    old_floor = CONFIG["min_loot_amount"]
+                    CONFIG["min_loot_amount"] = int(loot_amount * 0.5)
+                    log(f"[AdaptiveLoot] High loot ({loot_amount:,}) — raising floor: {old_floor:,} → {CONFIG['min_loot_amount']:,}")
+                else:
+                    log(f"[AdaptiveLoot] Battle accepted ({loot_amount:,}), floor unchanged at {CONFIG['min_loot_amount']:,}")
 
             # Scroll down a little bit
             log("Scrolling down...")
@@ -4239,6 +4262,7 @@ LOOT_TRACKER = _default_session.loot_tracker
 space_listener = _default_session.space_listener
 stop_requested = False       # read-only compat; real state lives on session
 pause_requested = False      # read-only compat; real state lives on session
+_consecutive_loot_skips: int = 0
 # current_account_name: use _default_session.current_account_name directly
 walls_upgraded_this_battle = 0
 
