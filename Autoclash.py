@@ -3347,6 +3347,7 @@ class HomeBattleSession:
         - Scroll down once loot is acceptable
         Returns True when ready to proceed, False on failure/stop.
         """
+        global _consecutive_loot_skips
         if self.stop_requested:
             return False
 
@@ -3433,7 +3434,6 @@ class HomeBattleSession:
 
                 # Adaptive loot floor — halve min_loot after 10 consecutive skips
                 if CONFIG.get("dynamic_loot", False):
-                    global _consecutive_loot_skips
                     _consecutive_loot_skips += 1
                     log(f"[AdaptiveLoot] Consecutive skips: {_consecutive_loot_skips}/10  |  current floor: {CONFIG['min_loot_amount']:,}")
                     if _consecutive_loot_skips >= 10:
@@ -3455,7 +3455,6 @@ class HomeBattleSession:
             # Adaptive loot floor — reset skip counter on any accepted battle,
             # and raise the floor if loot is more than 2x the current floor
             if CONFIG.get("dynamic_loot", False):
-                global _consecutive_loot_skips
                 _consecutive_loot_skips = 0
                 if loot_amount > 2 * CONFIG["min_loot_amount"]:
                     old_floor = CONFIG["min_loot_amount"]
