@@ -2485,7 +2485,7 @@ class HomeBattleSession:
         def _scroll_down_once() -> None:
             pyautogui.moveTo(scroll_cx, scroll_cy, duration=0.1)
             pyautogui.drag(0, -200, duration=0.3)
-            time.sleep(0.4)
+            time.sleep(3)
 
         def _scroll_up_n(n: int) -> None:
             for _ in range(n):
@@ -2866,7 +2866,7 @@ class HomeBattleSession:
         def _scroll_down_once() -> None:
             pyautogui.moveTo(scroll_cx, scroll_cy, duration=0.1)
             pyautogui.drag(0, -200, duration=0.3)
-            time.sleep(0.4)
+            time.sleep(3)
 
         def _scroll_up_n(n: int) -> None:
             for _ in range(n):
