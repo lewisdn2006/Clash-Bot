@@ -2544,10 +2544,11 @@ class HomeBattleSession:
             return None
 
         def _do_place_new_building(item_coords: Tuple[int, int]) -> bool:
-            """Click item, find arrow_orange.png, click 100px left+down, find build_confirm.png, click it."""
+            """Click item, find arrow_orange.png, click 100px left+down, find build_confirm.png, click it.
+            Retries finding build_confirm.png up to 5 times in case the confirm button takes time to go green."""
             log(f"Phase5: Clicking item (placement flow) at {item_coords}...")
             click_with_jitter(*item_coords)
-            _pauseable_sleep(self, 2.0)
+            _pauseable_sleep(self, 5.0)
 
             log("Phase5: Searching for 'arrow_orange.png'...")
             arrow_coords = _find_template_with_retry("arrow_orange.png")
@@ -2561,10 +2562,18 @@ class HomeBattleSession:
             click_with_jitter(click_x, click_y)
             _pauseable_sleep(self, 0.8)
 
-            log("Phase5: Searching for 'build_confirm.png'...")
-            build_confirm_coords = _find_template_with_retry("build_confirm.png")
+            log("Phase5: Searching for 'build_confirm.png' (up to 5 attempts)...")
+            build_confirm_coords = None
+            for _confirm_attempt in range(1, 6):
+                build_confirm_coords = _find_template_with_retry("build_confirm.png")
+                if build_confirm_coords:
+                    log(f"Phase5: 'build_confirm.png' found on attempt {_confirm_attempt}")
+                    break
+                log(f"Phase5: 'build_confirm.png' not found (attempt {_confirm_attempt}/5) - waiting 0.5s")
+                time.sleep(0.5)
+
             if not build_confirm_coords:
-                log("Phase5: 'build_confirm.png' not found - aborting placement")
+                log("Phase5: 'build_confirm.png' not found after 5 attempts - placement failed")
                 return False
 
             log(f"Phase5: Clicking build confirm at {build_confirm_coords}")
@@ -2701,13 +2710,33 @@ class HomeBattleSession:
                     _scroll_down_once()
 
             if new_accepted_coords:
-                if _do_place_new_building(new_accepted_coords):
-                    log(f"Phase5: New building placed (iteration {iteration}) - waiting 2s then re-checking conditions")
-                    upgraded_anything = True
-                    _pauseable_sleep(self, 2)
+                _placement_success = False
+                for _place_attempt in range(1, 4):
+                    log(f"Phase5: Placement attempt {_place_attempt}/3...")
+                    if _do_place_new_building(new_accepted_coords):
+                        log(f"Phase5: New building placed on attempt {_place_attempt} (iteration {iteration}) - waiting 2s then re-checking conditions")
+                        upgraded_anything = True
+                        _placement_success = True
+                        _pauseable_sleep(self, 2)
+                        break
+                    log(f"Phase5: Placement attempt {_place_attempt}/3 failed")
+                if _placement_success:
                     continue
-                log("Phase5: New building placement failed - exiting Phase 5")
-                break
+                # All 3 placement attempts failed — drag to shift village view and retry
+                log("Phase5: All 3 placement attempts failed — dragging to shift village view")
+                import random as _rnd
+                _ax = _rnd.choice([500, 1300])
+                _ay = _rnd.randint(100, 850)
+                _bx = 950
+                _by = _rnd.randint(100, 850)
+                log(f"Phase5: Dragging from ({_ax}, {_ay}) to ({_bx}, {_by}) to shift view")
+                import pyautogui as _pag
+                _pag.moveTo(_ax, _ay)
+                _pag.dragTo(_bx, _by, duration=0.8, button='left')
+                time.sleep(0.5)
+
+                log("Phase5: View shifted — retrying placement cycle from scratch")
+                continue
 
             # ===== PHASE C: Any other building (not Town Hall, not Builder's Hut) =====
             log("upgrade_account: ===== PHASE C: Searching for any upgradeable building =====")
@@ -2881,7 +2910,7 @@ class HomeBattleSession:
         def _do_place_new_building(item_coords: Tuple[int, int]) -> bool:
             log(f"Rush Phase5: Clicking item (placement flow) at {item_coords}...")
             click_with_jitter(*item_coords)
-            _pauseable_sleep(self, 2.0)
+            _pauseable_sleep(self, 5.0)
             arrow_coords = _find_template_with_retry("arrow_orange.png")
             if not arrow_coords:
                 log("Rush Phase5: 'arrow_orange.png' not found - aborting placement")
@@ -2890,9 +2919,17 @@ class HomeBattleSession:
             click_y = arrow_coords[1] + 100
             click_with_jitter(click_x, click_y)
             _pauseable_sleep(self, 0.8)
-            build_confirm_coords = _find_template_with_retry("build_confirm.png")
+            log("Rush Phase5: Searching for 'build_confirm.png' (up to 5 attempts)...")
+            build_confirm_coords = None
+            for _confirm_attempt in range(1, 6):
+                build_confirm_coords = _find_template_with_retry("build_confirm.png")
+                if build_confirm_coords:
+                    log(f"Rush Phase5: 'build_confirm.png' found on attempt {_confirm_attempt}")
+                    break
+                log(f"Rush Phase5: 'build_confirm.png' not found (attempt {_confirm_attempt}/5) - waiting 0.5s")
+                time.sleep(0.5)
             if not build_confirm_coords:
-                log("Rush Phase5: 'build_confirm.png' not found - aborting placement")
+                log("Rush Phase5: 'build_confirm.png' not found after 5 attempts - placement failed")
                 return False
             click_with_jitter(*build_confirm_coords)
             time.sleep(0.5)
@@ -3014,12 +3051,33 @@ class HomeBattleSession:
                     _scroll_down_once()
 
             if new_accepted_coords:
-                if _do_place_new_building(new_accepted_coords):
-                    log(f"Rush Phase5: New building placed (iteration {iteration})")
-                    upgraded_anything = True
-                    _pauseable_sleep(self, 2)
+                _placement_success = False
+                for _place_attempt in range(1, 4):
+                    log(f"Rush Phase5: Placement attempt {_place_attempt}/3...")
+                    if _do_place_new_building(new_accepted_coords):
+                        log(f"Rush Phase5: New building placed on attempt {_place_attempt} (iteration {iteration})")
+                        upgraded_anything = True
+                        _placement_success = True
+                        _pauseable_sleep(self, 2)
+                        break
+                    log(f"Rush Phase5: Placement attempt {_place_attempt}/3 failed")
+                if _placement_success:
                     continue
-                log("Rush Phase5: New building placement failed — continuing to Phase C")
+                # All 3 placement attempts failed — drag to shift village view and retry
+                log("Rush Phase5: All 3 placement attempts failed — dragging to shift village view")
+                import random as _rnd
+                _ax = _rnd.choice([500, 1300])
+                _ay = _rnd.randint(100, 850)
+                _bx = 950
+                _by = _rnd.randint(100, 850)
+                log(f"Rush Phase5: Dragging from ({_ax}, {_ay}) to ({_bx}, {_by}) to shift view")
+                import pyautogui as _pag
+                _pag.moveTo(_ax, _ay)
+                _pag.dragTo(_bx, _by, duration=0.8, button='left')
+                time.sleep(0.5)
+
+                log("Rush Phase5: View shifted — retrying placement cycle from scratch")
+                continue
 
             # ===== PHASE C: Town Hall only =====
             log("Rush Phase5: ===== PHASE C: Searching for Town Hall =====")

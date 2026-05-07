@@ -1106,6 +1106,7 @@ class FillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
     # noinspection PyUnresolvedReferences
     def run(self):  # noqa: C901
         try:
+            bot_reporter.start()
             self.status_update.emit("Initializing", "Starting Fill Accounts automation...")
             self.overlay_draw.emit([], "Fill Accounts — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
@@ -1506,6 +1507,12 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
             self.overlay_draw.emit([], "Builder Base — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             Autoclash_BB.space_listener.start()
+            import bot_reporter as _br
+            _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('pause',      _cmd_pause)
+            _br.register_command_callback('resume',     _cmd_resume)
+            _br.register_command_callback('stop',       lambda: self.stop())
+            _br.register_command_callback('screenshot', bot_reporter.send_screenshot)
 
             battle_count = 0
 
@@ -1629,6 +1636,12 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             _set_overlay_callback(self.overlay_draw.emit)
             Autoclash_BB._default_session.shutdown_requested = False
             Autoclash_BB.space_listener.start()
+            import bot_reporter as _br
+            _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('pause',      _cmd_pause)
+            _br.register_command_callback('resume',     _cmd_resume)
+            _br.register_command_callback('stop',       lambda: self.stop())
+            _br.register_command_callback('screenshot', bot_reporter.send_screenshot)
             Autoclash_BB.CONFIG["TEMPLATE_THRESH_DEFAULT"] = min(original_thresh, 0.84)
 
             Autoclash_BB.stats["battles_completed"] = 0
@@ -1786,6 +1799,12 @@ class ClanGamesWorker(QThread):
         bot_reporter.start()
         bot_reporter.update_phase("Starting", "Clan Games Cycler starting...")
         bot_reporter.log("Clan Games Cycler started")
+        import bot_reporter as _br
+        _br.set_mode('home')
+        _br.register_command_callback('pause',      _cmd_pause)
+        _br.register_command_callback('resume',     _cmd_resume)
+        _br.register_command_callback('stop',       lambda: self.stop())
+        _br.register_command_callback('screenshot', bot_reporter.send_screenshot)
 
         last_trash_by_ingame: Dict[str, float] = {}
 
@@ -2124,6 +2143,12 @@ class ClanScouterWorker(QThread):
             bot_reporter.start()
             bot_reporter.update_phase("Starting", "Clan Scouter starting...")
             bot_reporter.log("Clan Scouter started")
+            import bot_reporter as _br
+            _br.set_mode('home')
+            _br.register_command_callback('pause',      _cmd_pause)
+            _br.register_command_callback('resume',     _cmd_resume)
+            _br.register_command_callback('stop',       lambda: self.stop())
+            _br.register_command_callback('screenshot', bot_reporter.send_screenshot)
             # Register space key to allow instant stop
             try:
                 import keyboard as _kb
@@ -2230,6 +2255,12 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
 
             self.overlay_draw.emit([], "Capital Raid — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
+            import bot_reporter as _br
+            _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('pause',      _cmd_pause)
+            _br.register_command_callback('resume',     _cmd_resume)
+            _br.register_command_callback('stop',       lambda: self.stop())
+            _br.register_command_callback('screenshot', bot_reporter.send_screenshot)
 
             def _status(phase: str, msg: str):
                 log(f"CapitalWorker: {phase} — {msg}")
@@ -2579,6 +2610,13 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             self.overlay_draw.emit([], "Upgrade Accounts — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
+            import bot_reporter as _br
+            _br.set_mode('home')
+            _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
+            _br.register_command_callback('pause',      _cmd_pause)
+            _br.register_command_callback('resume',     _cmd_resume)
+            _br.register_command_callback('stop',       lambda: self.stop())
+            _br.register_command_callback('screenshot', bot_reporter.send_screenshot)
 
             battle_count = 0
             account_index = 0
