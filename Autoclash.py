@@ -2545,10 +2545,11 @@ class HomeBattleSession:
 
         def _do_place_new_building(item_coords: Tuple[int, int]) -> bool:
             """Click item, find arrow_orange.png, click 100px left+down, find build_confirm.png, click it.
-            Retries finding build_confirm.png up to 5 times in case the confirm button takes time to go green."""
+            After clicking confirm, moves the mouse away and checks if the button disappeared —
+            if it is still visible the placement was rejected (grey button). Retries up to 3 times."""
             log(f"Phase5: Clicking item (placement flow) at {item_coords}...")
             click_with_jitter(*item_coords)
-            _pauseable_sleep(self, 5.0)
+            _pauseable_sleep(self, 2.0)
 
             log("Phase5: Searching for 'arrow_orange.png'...")
             arrow_coords = _find_template_with_retry("arrow_orange.png")
@@ -2562,25 +2563,29 @@ class HomeBattleSession:
             click_with_jitter(click_x, click_y)
             _pauseable_sleep(self, 0.8)
 
-            log("Phase5: Searching for 'build_confirm.png' (up to 5 attempts)...")
-            build_confirm_coords = None
-            for _confirm_attempt in range(1, 6):
-                build_confirm_coords = _find_template_with_retry("build_confirm.png")
-                if build_confirm_coords:
-                    log(f"Phase5: 'build_confirm.png' found on attempt {_confirm_attempt}")
-                    break
-                log(f"Phase5: 'build_confirm.png' not found (attempt {_confirm_attempt}/5) - waiting 0.5s")
-                time.sleep(0.5)
-
+            log("Phase5: Searching for 'build_confirm.png'...")
+            build_confirm_coords = _find_template_with_retry("build_confirm.png")
             if not build_confirm_coords:
-                log("Phase5: 'build_confirm.png' not found after 5 attempts - placement failed")
+                log("Phase5: 'build_confirm.png' not found - aborting placement")
                 return False
 
-            log(f"Phase5: Clicking build confirm at {build_confirm_coords}")
-            click_with_jitter(*build_confirm_coords)
-            time.sleep(0.5)
-            _attempt_gem_speed_up("Phase5 new building")
-            return True
+            # Click the confirm button then check if it disappears (green = placed, grey = rejected)
+            for _click_attempt in range(1, 4):
+                log(f"Phase5: Clicking build confirm at {build_confirm_coords} (attempt {_click_attempt}/3)")
+                click_with_jitter(*build_confirm_coords)
+                # Move mouse away so it doesn't obscure the button area
+                pyautogui.moveTo(960, 540)
+                time.sleep(0.6)
+                still_there = _find_template_with_retry("build_confirm.png")
+                if not still_there:
+                    log(f"Phase5: Confirm button gone — building placed successfully (attempt {_click_attempt})")
+                    _attempt_gem_speed_up("Phase5 new building")
+                    return True
+                log(f"Phase5: Confirm button still visible after attempt {_click_attempt}/3 — placement rejected (grey button)")
+                build_confirm_coords = still_there  # update coords in case it shifted slightly
+
+            log("Phase5: Confirm button still present after 3 click attempts — placement failed")
+            return False
 
         def _do_upgrade_confirm(item_coords: Tuple[int, int]) -> bool:
             """Click item, find upgrade button, find confirm. Returns True on success."""
@@ -2714,7 +2719,7 @@ class HomeBattleSession:
                 for _place_attempt in range(1, 4):
                     log(f"Phase5: Placement attempt {_place_attempt}/3...")
                     if _do_place_new_building(new_accepted_coords):
-                        log(f"Phase5: New building placed on attempt {_place_attempt} (iteration {iteration}) - waiting 2s then re-checking conditions")
+                        log(f"Phase5: New building placed on attempt {_place_attempt} (iteration {iteration}) - waiting 2s")
                         upgraded_anything = True
                         _placement_success = True
                         _pauseable_sleep(self, 2)
@@ -2730,11 +2735,9 @@ class HomeBattleSession:
                 _bx = 950
                 _by = _rnd.randint(100, 850)
                 log(f"Phase5: Dragging from ({_ax}, {_ay}) to ({_bx}, {_by}) to shift view")
-                import pyautogui as _pag
-                _pag.moveTo(_ax, _ay)
-                _pag.dragTo(_bx, _by, duration=0.8, button='left')
+                pyautogui.moveTo(_ax, _ay)
+                pyautogui.dragTo(_bx, _by, duration=0.8, button='left')
                 time.sleep(0.5)
-
                 log("Phase5: View shifted — retrying placement cycle from scratch")
                 continue
 
@@ -2910,7 +2913,7 @@ class HomeBattleSession:
         def _do_place_new_building(item_coords: Tuple[int, int]) -> bool:
             log(f"Rush Phase5: Clicking item (placement flow) at {item_coords}...")
             click_with_jitter(*item_coords)
-            _pauseable_sleep(self, 5.0)
+            _pauseable_sleep(self, 2.0)
             arrow_coords = _find_template_with_retry("arrow_orange.png")
             if not arrow_coords:
                 log("Rush Phase5: 'arrow_orange.png' not found - aborting placement")
@@ -2919,22 +2922,24 @@ class HomeBattleSession:
             click_y = arrow_coords[1] + 100
             click_with_jitter(click_x, click_y)
             _pauseable_sleep(self, 0.8)
-            log("Rush Phase5: Searching for 'build_confirm.png' (up to 5 attempts)...")
-            build_confirm_coords = None
-            for _confirm_attempt in range(1, 6):
-                build_confirm_coords = _find_template_with_retry("build_confirm.png")
-                if build_confirm_coords:
-                    log(f"Rush Phase5: 'build_confirm.png' found on attempt {_confirm_attempt}")
-                    break
-                log(f"Rush Phase5: 'build_confirm.png' not found (attempt {_confirm_attempt}/5) - waiting 0.5s")
-                time.sleep(0.5)
+            build_confirm_coords = _find_template_with_retry("build_confirm.png")
             if not build_confirm_coords:
-                log("Rush Phase5: 'build_confirm.png' not found after 5 attempts - placement failed")
+                log("Rush Phase5: 'build_confirm.png' not found - aborting placement")
                 return False
-            click_with_jitter(*build_confirm_coords)
-            time.sleep(0.5)
-            _attempt_gem_speed_up("Rush Phase5 new building")
-            return True
+            for _click_attempt in range(1, 4):
+                log(f"Rush Phase5: Clicking build confirm at {build_confirm_coords} (attempt {_click_attempt}/3)")
+                click_with_jitter(*build_confirm_coords)
+                pyautogui.moveTo(960, 540)
+                time.sleep(0.6)
+                still_there = _find_template_with_retry("build_confirm.png")
+                if not still_there:
+                    log(f"Rush Phase5: Confirm button gone — building placed successfully (attempt {_click_attempt})")
+                    _attempt_gem_speed_up("Rush Phase5 new building")
+                    return True
+                log(f"Rush Phase5: Confirm button still visible after attempt {_click_attempt}/3 — placement rejected (grey button)")
+                build_confirm_coords = still_there
+            log("Rush Phase5: Confirm button still present after 3 click attempts — placement failed")
+            return False
 
         def _do_upgrade_confirm(item_coords: Tuple[int, int]) -> bool:
             log(f"Rush Phase5: Clicking item at {item_coords}...")
@@ -3071,11 +3076,9 @@ class HomeBattleSession:
                 _bx = 950
                 _by = _rnd.randint(100, 850)
                 log(f"Rush Phase5: Dragging from ({_ax}, {_ay}) to ({_bx}, {_by}) to shift view")
-                import pyautogui as _pag
-                _pag.moveTo(_ax, _ay)
-                _pag.dragTo(_bx, _by, duration=0.8, button='left')
+                pyautogui.moveTo(_ax, _ay)
+                pyautogui.dragTo(_bx, _by, duration=0.8, button='left')
                 time.sleep(0.5)
-
                 log("Rush Phase5: View shifted — retrying placement cycle from scratch")
                 continue
 
