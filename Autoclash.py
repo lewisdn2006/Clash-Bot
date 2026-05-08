@@ -2470,7 +2470,7 @@ class HomeBattleSession:
 
         # Words that disqualify a building row from Phase C.
         # Add entries here to exclude additional buildings in future.
-        PHASE_C_EXCLUDE_WORDS: List[str] = ["Town", "Hall", "Hut", "Boat"]
+        PHASE_C_EXCLUDE_WORDS: List[str] = ["Town", "Hall", "Hut", "Boat", "FREE"]
 
         log("=" * 60)
         log("PHASE 5: UPGRADE ACCOUNT (Storage / New Building / Other)")
@@ -2790,17 +2790,26 @@ class HomeBattleSession:
                 )
                 buildergems_y = buildergems_coords[1] if buildergems_coords else None
 
+                # Pre-scan full region for each exclusion word and record their y-positions.
+                # Using the full region (not a narrow per-icon band) catches cases where the
+                # building label is offset from the detected cost icon (e.g. Boat is FREE so
+                # has no real cost icon — a false positive is detected instead, and the label
+                # sits further than 15px away from it).
+                excluded_ys: List[int] = []
+                for _excl_word in PHASE_C_EXCLUDE_WORDS:
+                    _excl_hits = find_all_text_in_region(
+                        _excl_word, search_x1, search_y1, search_x2, search_y2, confidence=0.60
+                    )
+                    for (_, _ey) in _excl_hits:
+                        log(f"upgrade_account: Pre-scan found exclusion word '{_excl_word}' at y={_ey}")
+                        excluded_ys.append(_ey)
+
                 accepted: List[Tuple[int, int]] = []
                 for (cx, cy) in cost_positions:
-                    # Check each exclusion word via OCR on this row's y-band
-                    excluded_by = [
-                        w for w in PHASE_C_EXCLUDE_WORDS
-                        if find_all_text_in_region(
-                            w, search_x1, cy - 15, search_x2, cy + 15, confidence=0.70
-                        )
-                    ]
-                    if excluded_by:
-                        log(f"upgrade_account: Rejecting icon at y={cy} — matched exclusion word(s): {excluded_by}")
+                    in_excl_zone = any(abs(cy - ey) <= 50 for ey in excluded_ys)
+                    if in_excl_zone:
+                        matched = [PHASE_C_EXCLUDE_WORDS[i] for i, ey in enumerate(excluded_ys) if abs(cy - ey) <= 50]
+                        log(f"upgrade_account: Rejecting icon at y={cy} — within 50px of exclusion word(s) at {[ey for ey in excluded_ys if abs(cy - ey) <= 50]}")
                         continue
                     if buildergems_y is not None and abs(buildergems_y - cy) <= 15:
                         log(f"upgrade_account: Rejecting icon at y={cy} — buildergems on same row")
