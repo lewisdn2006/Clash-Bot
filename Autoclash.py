@@ -2470,7 +2470,7 @@ class HomeBattleSession:
 
         # Words that disqualify a building row from Phase C.
         # Add entries here to exclude additional buildings in future.
-        PHASE_C_EXCLUDE_WORDS: List[str] = ["Town", "Hall", "Hut"]
+        PHASE_C_EXCLUDE_WORDS: List[str] = ["Town", "Hall", "Hut", "Boat"]
 
         log("=" * 60)
         log("PHASE 5: UPGRADE ACCOUNT (Storage / New Building / Other)")
