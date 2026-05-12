@@ -2584,6 +2584,12 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 if phase5_found_something:
                     account_upgrade_counts[target_account] = account_upgrade_counts.get(target_account, 0) + 1
                     bot_reporter.report_upgrade(target_account, "rush upgrade", account_upgrade_counts[target_account])
+                # Check if rush_upgrade_account flagged that the target TH level was reached
+                if getattr(Autoclash._default_session, 'rush_target_reached', False):
+                    Autoclash._default_session.rush_target_reached = False
+                    self.account_behaviours[target_account] = UPGRADE_BEHAVIOUR_UPGRADE
+                    log(f"[RushComplete] {target_account} — behaviour switched from Rush to Upgrade")
+                    bot_reporter.log(f"[RushComplete] {target_account} reached target TH level — now running as Upgrade Account")
 
             disabled_acct = pop_gem_upgrades_disabled()
             if disabled_acct:

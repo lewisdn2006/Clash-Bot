@@ -2596,8 +2596,16 @@ class HomeBattleSession:
             log("Phase5: Searching for 'upgrade_button_singular.png'...")
             upgrade_coords = _find_template_with_retry("upgrade_button_singular.png")
             if not upgrade_coords:
-                log("Phase5: Upgrade button not found - aborting this attempt")
-                return False
+                log("Phase5: Upgrade button not found — checking for hero confirm screen...")
+                confirm_coords = _find_template_with_retry("confirm_storage.png")
+                if not confirm_coords:
+                    log("Phase5: Neither upgrade button nor confirm found - aborting this attempt")
+                    return False
+                log(f"Phase5: Hero confirm screen detected — clicking confirm at {confirm_coords}")
+                click_with_jitter(*confirm_coords)
+                time.sleep(0.5)
+                _attempt_gem_speed_up("Phase5 upgrade")
+                return True
             log(f"Phase5: Clicking upgrade button at {upgrade_coords}")
             click_with_jitter(*upgrade_coords)
             time.sleep(0.5)
@@ -2956,8 +2964,16 @@ class HomeBattleSession:
             time.sleep(0.5)
             upgrade_coords = _find_template_with_retry("upgrade_button_singular.png")
             if not upgrade_coords:
-                log("Rush Phase5: Upgrade button not found - aborting")
-                return False
+                log("Rush Phase5: Upgrade button not found — checking for hero confirm screen...")
+                confirm_coords = _find_template_with_retry("confirm_storage.png")
+                if not confirm_coords:
+                    log("Rush Phase5: Neither upgrade button nor confirm found - aborting")
+                    return False
+                log(f"Rush Phase5: Hero confirm screen detected — clicking confirm at {confirm_coords}")
+                click_with_jitter(*confirm_coords)
+                time.sleep(0.5)
+                _attempt_gem_speed_up("Rush Phase5 upgrade")
+                return True
             click_with_jitter(*upgrade_coords)
             time.sleep(0.5)
             confirm_coords = _find_template_with_retry("confirm_storage.png")
@@ -3151,6 +3167,16 @@ class HomeBattleSession:
                 log(f"Rush Phase5: Town Hall upgraded (iteration {iteration})")
                 upgraded_anything = True
                 _pauseable_sleep(self, 2)
+                # Check for finish_rush popup — indicates we've hit the target TH level
+                finish_rush_coords = find_template("finish_rush.png", confidence=0.80)
+                if finish_rush_coords:
+                    log("Rush Phase5: [RushComplete] finish_rush.png detected — target TH level reached")
+                    log("Rush Phase5: [RushComplete] Clicking Continue at (1100, 860)")
+                    click_with_jitter(1100, 860)
+                    time.sleep(1.0)
+                    self.rush_target_reached = True
+                    log("Rush Phase5: [RushComplete] rush_target_reached flag set — exiting rush loop")
+                    break
                 continue
             else:
                 log("Rush Phase5: Town Hall upgrade confirm failed — exiting")
