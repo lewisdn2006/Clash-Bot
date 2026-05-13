@@ -3390,12 +3390,25 @@ class HomeBattleSession:
                     log("Army not full — opening barracks to fill army...")
                     click_with_jitter(1100, 388)
                     time.sleep(0.5)
-                    log("Clicking train button at (257, 805) 20 times to fill army...")
-                    for i in range(20):
-                        click_with_jitter(257, 805)
-                        time.sleep(0.2)
-                    CONFIG["num_battle_points"] += 20
-                    log(f"Army topped up — increased battle points to {CONFIG['num_battle_points']}")
+                    total_clicks = 0
+                    while True:
+                        log(f"Fill army: clicking train button 5 times (total so far: {total_clicks})...")
+                        for i in range(5):
+                            click_with_jitter(257, 805)
+                            time.sleep(0.2)
+                        total_clicks += 5
+                        time.sleep(0.3)
+                        still_not_full = find_template(
+                            "army_not_full.png",
+                            search_box=(600, 250, 900, 350),
+                            confidence=0.8,
+                        )
+                        if not still_not_full:
+                            log(f"Fill army: army now full after {total_clicks} clicks")
+                            break
+                        log(f"Fill army: still not full — clicking 5 more times...")
+                    CONFIG["num_battle_points"] += total_clicks
+                    log(f"Army topped up — increased battle points by {total_clicks} to {CONFIG['num_battle_points']}")
                     # Persist the updated num_battle_points to account_configs.json
                     account_name = normalize_account_name(self.current_account_name or "")
                     if account_name:
