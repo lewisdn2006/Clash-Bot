@@ -2464,6 +2464,10 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
         Autoclash._default_session.stop_requested = True
 
     @staticmethod
+    def _are_storages_full() -> bool:
+        return bool(Autoclash.check_gold_full()) and bool(Autoclash.check_elixir_full())
+
+    @staticmethod
     def _resources_full_no_builder() -> bool:
         """Return True when both storages are full AND all builders are busy."""
         gold_full = bool(Autoclash.check_gold_full())
