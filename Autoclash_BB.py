@@ -979,7 +979,7 @@ class BuilderBattleSession:
             pyautogui.moveTo(x_end, y_end, duration=0.3)
             pyautogui.mouseUp()
 
-        time.sleep(random_interval())
+        time.sleep(1.0)
 
         # Gesture 2: click(1247,124)
         x, y = add_jitter(1247, 124)
@@ -988,7 +988,7 @@ class BuilderBattleSession:
         else:
             smooth_click(x, y)
         logger.info("End gesture 2")
-        time.sleep(random_interval())
+        time.sleep(1.0)
 
         # Gesture 3: click(1399,913)
         x, y = add_jitter(1399, 913)
@@ -997,7 +997,7 @@ class BuilderBattleSession:
         else:
             smooth_click(x, y)
         logger.info("End gesture 3")
-        time.sleep(random_interval())
+        time.sleep(1.0)
 
         # Gesture 4: click(1621,102)
         x, y = add_jitter(1621, 102)
@@ -1006,7 +1006,7 @@ class BuilderBattleSession:
         else:
             smooth_click(x, y)
         logger.info("End gesture 4")
-        time.sleep(random_interval())
+        time.sleep(1.0)
 
         logger.info("✓ Phase 2 complete")
         return True
