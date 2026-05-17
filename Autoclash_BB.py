@@ -171,9 +171,12 @@ class SpaceListener:
             try:
                 import subprocess
                 subprocess.Popen(
-                    [r'C:\Users\fghgh\Desktop\disconnect.bat'],
-                    shell=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    [
+                        "powershell.exe",
+                        "-Command",
+                        "Start-Process cmd.exe -ArgumentList '/c \"C:\\Users\\fghgh\\Desktop\\disconnect.bat\"' -Verb RunAs -WindowStyle Hidden"
+                    ],
+                    shell=False
                 )
             except Exception as e:
                 logger.info(f"WARNING: Failed to launch disconnect.bat: {e}")
