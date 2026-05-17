@@ -1806,6 +1806,27 @@ class ClanGamesWorker(QThread):
         _br.register_command_callback('stop',       lambda: self.stop())
         _br.register_command_callback('screenshot', bot_reporter.send_screenshot)
 
+        _clan_games_keyboard_registered = False
+        try:
+            import keyboard as _kb
+            _kb.add_hotkey("space", self.stop)
+            def _on_cg_disconnect():
+                log("Ctrl+D pressed — disconnecting Remote Desktop...")
+                try:
+                    import subprocess
+                    subprocess.Popen(
+                        [r'C:\Users\fghgh\Desktop\disconnect.bat'],
+                        shell=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW,
+                    )
+                except Exception as e:
+                    log(f"WARNING: Failed to launch disconnect.bat: {e}")
+            _kb.add_hotkey("ctrl+d", _on_cg_disconnect)
+            _clan_games_keyboard_registered = True
+            log("ClanGamesWorker: space-stop and Ctrl+D disconnect enabled")
+        except Exception:
+            log("ClanGamesWorker: keyboard module unavailable; hotkeys disabled")
+
         last_trash_by_ingame: Dict[str, float] = {}
 
         try:
@@ -2153,6 +2174,18 @@ class ClanScouterWorker(QThread):
             try:
                 import keyboard as _kb
                 _kb.add_hotkey("space", self.stop)
+                def _on_scout_disconnect():
+                    log("Ctrl+D pressed — disconnecting Remote Desktop...")
+                    try:
+                        import subprocess
+                        subprocess.Popen(
+                            [r'C:\Users\fghgh\Desktop\disconnect.bat'],
+                            shell=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                        )
+                    except Exception as e:
+                        log(f"WARNING: Failed to launch disconnect.bat: {e}")
+                _kb.add_hotkey("ctrl+d", _on_scout_disconnect)
                 _keyboard_registered = True
             except Exception:
                 log("ClanScouterWorker: keyboard module unavailable; space-stop disabled")
@@ -2248,8 +2281,20 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
             try:
                 import keyboard as _kb
                 _kb.add_hotkey("space", self.stop)
+                def _on_cap_disconnect():
+                    log("Ctrl+D pressed — disconnecting Remote Desktop...")
+                    try:
+                        import subprocess
+                        subprocess.Popen(
+                            [r'C:\Users\fghgh\Desktop\disconnect.bat'],
+                            shell=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                        )
+                    except Exception as e:
+                        log(f"WARNING: Failed to launch disconnect.bat: {e}")
+                _kb.add_hotkey("ctrl+d", _on_cap_disconnect)
                 _keyboard_registered = True
-                log("ClanCapitalWorker: space-stop enabled")
+                log("ClanCapitalWorker: space-stop and Ctrl+D disconnect enabled")
             except Exception:
                 log("ClanCapitalWorker: keyboard module unavailable; space-stop disabled")
 

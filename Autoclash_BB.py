@@ -146,6 +146,7 @@ class SpaceListener:
     
     def __init__(self, session=None):
         self.handler = None
+        self._disconnect_handler = None
         self._session = session
     
     def start(self):
@@ -164,13 +165,30 @@ class SpaceListener:
             logger.info("=" * 60)
         
         self.handler = keyboard.on_press_key("space", on_space, suppress=False)
-        logger.info("Space key listener started. Press SPACE to stop at any time.")
-    
+
+        def on_disconnect():
+            logger.info("Ctrl+D pressed — disconnecting Remote Desktop session...")
+            try:
+                import subprocess
+                subprocess.Popen(
+                    [r'C:\Users\fghgh\Desktop\disconnect.bat'],
+                    shell=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                )
+            except Exception as e:
+                logger.info(f"WARNING: Failed to launch disconnect.bat: {e}")
+
+        self._disconnect_handler = keyboard.add_hotkey("ctrl+d", on_disconnect, suppress=False)
+        logger.info("Space key listener started. Press SPACE to stop, Ctrl+D to disconnect RDP.")
+
     def stop(self):
         """Stop listening for Space key."""
         if HAS_KEYBOARD and self.handler:
             keyboard.unhook(self.handler)
             self.handler = None
+        if HAS_KEYBOARD and self._disconnect_handler:
+            keyboard.remove_hotkey(self._disconnect_handler)
+            self._disconnect_handler = None
 
 
 # ================================
