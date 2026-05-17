@@ -977,6 +977,7 @@ class BuilderBattleSession:
             pyautogui.mouseDown(x_start, y_start)
             time.sleep(0.1)
             pyautogui.moveTo(x_end, y_end, duration=0.3)
+            time.sleep(1.0)
             pyautogui.mouseUp()
 
         time.sleep(1.0)
