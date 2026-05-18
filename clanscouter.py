@@ -167,7 +167,7 @@ OPEN_SEARCH_SEQUENCE: List[Tuple[int, int]] = [
 
 SETTINGS_MENU_COORD: Tuple[int, int] = (1852, 841)
 ACCOUNT_SWITCH_MENU_COORD: Tuple[int, int] = (1245, 244)
-ACCOUNT_SWITCH_BOX: Tuple[int, int, int, int] = (1321, 496, 1917, 1080)
+ACCOUNT_SWITCH_BOX: Tuple[int, int, int, int] = (1565, 450, 1917, 1080)
 
 ACCOUNT_NAME_MIN_CONFIDENCE = 0.75
 LEWIS3_SWITCH_NAME = "TrustworthyLewis3"
