@@ -3775,20 +3775,26 @@ class HomeBattleSession:
             if not event_troop_found:
                 log("WARNING: Event troop button not found, skipping event placement...")
             else:
-                # Place event troops at random battle points
+                # Place event troops across battle points
                 event_troop_count = CONFIG.get("event_troop_count", 50)
-                if event_troop_count <= len(all_battle_points):
-                    event_troop_points = random.sample(all_battle_points, event_troop_count)
-                else:
-                    event_troop_points = random.choices(all_battle_points, k=event_troop_count)
-                log(f"Placing event dragons at {len(event_troop_points)} battle points: {event_troop_points}")
+                fast_event = event_troop_count > 16
+                if fast_event:
+                    log(f"Event troop count > 16 ({event_troop_count}) - using fast deployment clicks")
+                log(f"Placing {event_troop_count} event troops across battle points...")
 
-                for i, (x, y) in enumerate(event_troop_points):
-                    log(f"Placing event dragon at battle point {i+1}: ({x}, {y})")
-                    click_with_jitter(x, y)
-                    random_delay()
+                for i in range(event_troop_count):
+                    coord_index = i % len(all_battle_points)
+                    x, y = all_battle_points[coord_index]
+                    log(f"Placing event troop at battle point {i+1}: ({x}, {y})")
+                    if fast_event:
+                        click_deploy(x, y)
+                    else:
+                        click_with_jitter(x, y)
+                        random_delay()
+                    if (i + 1) % 10 == 0 and i + 1 < event_troop_count:
+                        log(f"Completed {i + 1} event troops, looping back to position 1...")
 
-                log("Event dragon placement complete!")
+                log("Event troop placement complete!")
         else:
             log(f"Event NOT active for this battle - skipping event dragons (event_active_for_battle={CONFIG.get('event_active_for_battle', 'NOT SET')})")
 
