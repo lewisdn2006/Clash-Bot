@@ -3756,7 +3756,7 @@ class HomeBattleSession:
             log("Event is active! Placing event dragons...")
 
             # Search for event troop button
-            event_troop_button = CONFIG.get("event_troop_button", "drag_button.png")
+            event_troop_button = CONFIG.get("event_troop_button", "lavaloon.png")
             log(f"Searching for {event_troop_button} to activate...")
 
             event_troop_found = False
@@ -3776,7 +3776,7 @@ class HomeBattleSession:
                 log("WARNING: Event troop button not found, skipping event placement...")
             else:
                 # Place event troops at random battle points
-                event_troop_count = CONFIG.get("event_troop_count", 16)
+                event_troop_count = CONFIG.get("event_troop_count", 50)
                 if event_troop_count <= len(all_battle_points):
                     event_troop_points = random.sample(all_battle_points, event_troop_count)
                 else:

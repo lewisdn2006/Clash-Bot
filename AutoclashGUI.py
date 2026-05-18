@@ -781,17 +781,19 @@ class AccountConfigPage(QWidget):
         self.auto_upgrade_storages_cb = QCheckBox("Auto Upgrade Storages (Phase 5)")
         form.addWidget(self.auto_upgrade_storages_cb, r, 0, 1, 2); r += 1
 
-        # Event active with icon
-        event_row = QHBoxLayout()
-        self.event_active_cb = QCheckBox("Event Active (Electro Dragon x30)")
-        pm = _load_pixmap("edrag_button.png", 20)
-        if pm:
-            icon_lbl = QLabel()
-            icon_lbl.setPixmap(pm)
-            event_row.addWidget(icon_lbl)
-        event_row.addWidget(self.event_active_cb)
-        event_row.addStretch()
-        form.addLayout(event_row, r, 0, 1, 2); r += 1
+        # Event troop controls
+        self.event_active_cb = QCheckBox("Event Active")
+        form.addWidget(self.event_active_cb, r, 0, 1, 2); r += 1
+
+        form.addWidget(QLabel("Event Troop:"), r, 0)
+        self.event_troop_combo = QComboBox()
+        self.event_troop_combo.addItems(_EVENT_TROOP_OPTIONS)
+        form.addWidget(self.event_troop_combo, r, 1); r += 1
+
+        form.addWidget(QLabel("Event Troop Count:"), r, 0)
+        self.event_count_combo = QComboBox()
+        self.event_count_combo.addItems([str(i) for i in range(1, 61)])
+        form.addWidget(self.event_count_combo, r, 1); r += 1
 
         self.do_ranked_cb = QCheckBox("Do Ranked")
         form.addWidget(self.do_ranked_cb, r, 0, 1, 2); r += 1
@@ -866,6 +868,8 @@ class AccountConfigPage(QWidget):
         self.auto_upgrade_cb.setChecked(bool(settings.get("auto_upgrade_walls", True)))
         self.auto_upgrade_storages_cb.setChecked(bool(settings.get("auto_upgrade_storages", True)))
         self.event_active_cb.setChecked(bool(settings.get("event_active", False)))
+        _set_combo(self.event_troop_combo, str(settings.get("event_troop_button", _EVENT_TROOP_OPTIONS[0])))
+        _set_combo(self.event_count_combo, str(int(settings.get("event_troop_count", 50))))
         self.do_ranked_cb.setChecked(bool(settings.get("do_ranked", True)))
         self.siege_cb.setChecked(bool(settings.get("siege_machine_active", False)))
         self.clan_games_cb.setChecked(bool(settings.get("clan_games_enabled", False)))
@@ -887,6 +891,8 @@ class AccountConfigPage(QWidget):
             "auto_upgrade_walls": self.auto_upgrade_cb.isChecked(),
             "auto_upgrade_storages": self.auto_upgrade_storages_cb.isChecked(),
             "event_active": self.event_active_cb.isChecked(),
+            "event_troop_button": self.event_troop_combo.currentText(),
+            "event_troop_count": int(self.event_count_combo.currentText()),
             "do_ranked": self.do_ranked_cb.isChecked(),
             "siege_machine_active": self.siege_cb.isChecked(),
             "clan_games_enabled": self.clan_games_cb.isChecked(),
@@ -897,6 +903,22 @@ class AccountConfigPage(QWidget):
             "time_before_ability": self.ability_slider.value(),
         }
 
+
+# ─── Event troop options ─────────────────────────────────────────────────────
+# To change the current event troop: update the FIRST entry in this list.
+# The first entry becomes the default in the GUI and in Autoclash.py's CONFIG.
+_EVENT_TROOP_OPTIONS = [
+    "lavaloon.png",
+    "edrag_button.png",
+    "drag_button.png",
+    "Azdrag.png",
+    "babydrag_button.png",
+    "dragrider_button.png",
+    "infernodrag_button.png",
+    "superdrag_button.png",
+    "barb_button.png",
+    "gold_drag_icon.png",
+]
 
 # ─── Setting definitions for Mass Configure ──────────────────────────────────
 # Each entry: (display_name, config_key, widget_type, options_list_or_None)
@@ -911,6 +933,8 @@ _MASS_SETTINGS = [
     ("Auto Upgrade Walls",     "auto_upgrade_walls",   "bool",  None),
     ("Auto Upgrade Storages",  "auto_upgrade_storages","bool",  None),
     ("Event Active",           "event_active",         "bool",  None),
+    ("Event Troop",            "event_troop_button",   "combo", _EVENT_TROOP_OPTIONS),
+    ("Event Troop Count",      "event_troop_count",    "combo", [str(i) for i in range(1, 61)]),
     ("Do Ranked",              "do_ranked",            "bool",  None),
     ("Siege Machine Active",   "siege_machine_active", "bool",  None),
     ("Clan Games Active",      "clan_games_enabled",   "bool",  None),
