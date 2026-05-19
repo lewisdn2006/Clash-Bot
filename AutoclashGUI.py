@@ -653,10 +653,14 @@ class UpgradeAccountsPage(QWidget):
 
         self._checkboxes: Dict[str, QCheckBox] = {}
         self._combos: Dict[str, QComboBox] = {}
+        self._row_widgets: Dict[str, QWidget] = {}
+        self._order: List[str] = list(ALL_APPROVED_ACCOUNTS)
 
         for name in ALL_APPROVED_ACCOUNTS:
-            row = QHBoxLayout()
-            row.setSpacing(8)
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setSpacing(8)
+            row_layout.setContentsMargins(0, 0, 0, 0)
 
             cb = QCheckBox()
             cb.setFixedWidth(20)
@@ -667,17 +671,31 @@ class UpgradeAccountsPage(QWidget):
 
             combo = QComboBox()
             combo.addItems(self._BEHAVIOUR_LABELS)
-            combo.setCurrentIndex(1)          # default: Upgrade Account
+            combo.setCurrentIndex(1)
             combo.setFixedWidth(160)
             self._combos[name] = combo
 
-            row.addWidget(cb)
-            row.addWidget(lbl)
-            row.addWidget(combo)
-            row.addStretch()
-            inner_layout.addLayout(row)
+            up_btn = QPushButton("↑")
+            up_btn.setFixedWidth(28)
+            up_btn.setFixedHeight(24)
+            up_btn.clicked.connect(lambda *_, n=name: self._move_up(n))
 
-        inner_layout.addStretch()
+            down_btn = QPushButton("↓")
+            down_btn.setFixedWidth(28)
+            down_btn.setFixedHeight(24)
+            down_btn.clicked.connect(lambda *_, n=name: self._move_down(n))
+
+            row_layout.addWidget(cb)
+            row_layout.addWidget(lbl)
+            row_layout.addWidget(combo)
+            row_layout.addWidget(up_btn)
+            row_layout.addWidget(down_btn)
+            row_layout.addStretch()
+
+            self._row_widgets[name] = row_widget
+
+        self._inner_layout = inner_layout
+        self._rebuild_list()
         scroll.setWidget(inner_widget)
         outer.addWidget(scroll, stretch=1)
 
@@ -699,23 +717,47 @@ class UpgradeAccountsPage(QWidget):
         # Restore previous selections
         self.load_state()
 
+    def _rebuild_list(self) -> None:
+        """Repopulate inner_layout in the current self._order sequence."""
+        while self._inner_layout.count():
+            self._inner_layout.takeAt(0)
+        for name in self._order:
+            self._inner_layout.addWidget(self._row_widgets[name])
+        self._inner_layout.addStretch()
+
+    def _move_up(self, name: str) -> None:
+        idx = self._order.index(name)
+        if idx > 0:
+            self._order[idx], self._order[idx - 1] = self._order[idx - 1], self._order[idx]
+            self._rebuild_list()
+
+    def _move_down(self, name: str) -> None:
+        idx = self._order.index(name)
+        if idx < len(self._order) - 1:
+            self._order[idx], self._order[idx + 1] = self._order[idx + 1], self._order[idx]
+            self._rebuild_list()
+
     def account_behaviours(self) -> Dict[str, int]:
-        """Return {account_name: behaviour_constant} for every ticked account."""
+        """Return {account_name: behaviour_constant} for every ticked account, in display order."""
         result: Dict[str, int] = {}
-        for name, cb in self._checkboxes.items():
-            if cb.isChecked():
+        for name in self._order:
+            if self._checkboxes[name].isChecked():
                 combo_index = self._combos[name].currentIndex()
                 result[name] = self._INDEX_TO_BEHAVIOUR.get(combo_index, UPGRADE_BEHAVIOUR_UPGRADE)
         return result
 
     def save_state(self) -> None:
-        """Persist checkbox and combo state to upgrade_accounts_state.json."""
-        state = {}
-        for name in ALL_APPROVED_ACCOUNTS:
-            state[name] = {
-                "checked": self._checkboxes[name].isChecked(),
-                "combo_index": self._combos[name].currentIndex(),
-            }
+        """Persist checkbox, combo, and order state to upgrade_accounts_state.json."""
+        state = {
+            "order": self._order,
+            "accounts": {
+                name: {
+                    "checked": self._checkboxes[name].isChecked(),
+                    "combo_index": self._combos[name].currentIndex(),
+                }
+                for name in ALL_APPROVED_ACCOUNTS
+            },
+        }
         try:
             path = Path(__file__).parent / "upgrade_accounts_state.json"
             path.write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -723,13 +765,25 @@ class UpgradeAccountsPage(QWidget):
             print(f"UpgradeAccountsPage: failed to save state: {e}")
 
     def load_state(self) -> None:
-        """Restore checkbox and combo state from upgrade_accounts_state.json."""
+        """Restore checkbox, combo, and order state from upgrade_accounts_state.json."""
         try:
             path = Path(__file__).parent / "upgrade_accounts_state.json"
             if not path.exists():
                 return
             state = json.loads(path.read_text(encoding="utf-8"))
-            for name, data in state.items():
+
+            # Restore order — include only accounts that still exist, append any new ones at the end
+            saved_order = state.get("order", [])
+            known = set(ALL_APPROVED_ACCOUNTS)
+            restored = [a for a in saved_order if a in known]
+            for a in ALL_APPROVED_ACCOUNTS:
+                if a not in restored:
+                    restored.append(a)
+            self._order = restored
+            self._rebuild_list()
+
+            # Restore checkbox and combo state
+            for name, data in state.get("accounts", {}).items():
                 if name in self._checkboxes:
                     self._checkboxes[name].setChecked(data.get("checked", False))
                 if name in self._combos:

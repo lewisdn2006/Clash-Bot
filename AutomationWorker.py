@@ -928,8 +928,8 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
                         self.overlay_draw.emit([], f"Home Village — Battle {run_count}: Upgrading account")
                         self.status_update.emit("Phase 5", "Upgrading account...")
                         bot_reporter.update_phase("Phase 5", "Upgrading account...")
-                        _did_upgrade = upgrade_account()
-                        if _did_upgrade:
+                        upgrade_account()
+                        if getattr(Autoclash._default_session, 'phase5_did_upgrade', False):
                             total_upgrades += 1
                             bot_reporter.report_upgrade(
                                 Autoclash._default_session.current_account_name or detected,
@@ -1324,8 +1324,8 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 self.overlay_draw.emit([], f"Cycle Accounts — Battle {battle_index}: Upgrading account")
                 self.status_update.emit("Phase 5", "Upgrading account...")
                 bot_reporter.update_phase("Phase 5", "Upgrading account...")
-                _did_upgrade = upgrade_account()
-                if _did_upgrade:
+                upgrade_account()
+                if getattr(Autoclash._default_session, 'phase5_did_upgrade', False):
                     _upg_acct = Autoclash._default_session.current_account_name or target_account
                     account_upgrade_counts[_upg_acct] = account_upgrade_counts.get(_upg_acct, 0) + 1
                     bot_reporter.report_upgrade(_upg_acct, "account upgrade", account_upgrade_counts[_upg_acct])
@@ -2621,7 +2621,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 self.status_update.emit("Phase 5", "Upgrading account...")
                 bot_reporter.update_phase("Phase 5", "Upgrading account...")
                 phase5_found_something = upgrade_account()
-                if phase5_found_something:
+                if getattr(Autoclash._default_session, 'phase5_did_upgrade', False):
                     account_upgrade_counts[target_account] = account_upgrade_counts.get(target_account, 0) + 1
                     bot_reporter.report_upgrade(target_account, "account upgrade", account_upgrade_counts[target_account])
 
@@ -2630,7 +2630,7 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 self.status_update.emit("Phase 5", "Rush upgrading (storages → new buildings → Town Hall)...")
                 bot_reporter.update_phase("Phase 5", "Rush upgrading account...")
                 phase5_found_something = rush_upgrade_account()
-                if phase5_found_something:
+                if getattr(Autoclash._default_session, 'phase5_did_upgrade', False):
                     account_upgrade_counts[target_account] = account_upgrade_counts.get(target_account, 0) + 1
                     bot_reporter.report_upgrade(target_account, "rush upgrade", account_upgrade_counts[target_account])
                 # Check if rush_upgrade_account flagged that the target TH level was reached
