@@ -2624,7 +2624,7 @@ class HomeBattleSession:
         # ===== Main loop: keep upgrading while conditions are met =====
         iteration = 0
         upgraded_anything = False
-        Autoclash._default_session.phase5_did_upgrade = False
+        self.phase5_did_upgrade = False
         nothing_found_to_upgrade = False
         while not self.stop_requested:
             iteration += 1
@@ -2678,7 +2678,7 @@ class HomeBattleSession:
                     if _do_place_new_building(storage_coords):
                         log(f"Phase5: New storage placed (iteration {iteration}) - waiting 2s then re-checking conditions")
                         upgraded_anything = True
-                        Autoclash._default_session.phase5_did_upgrade = True
+                        self.phase5_did_upgrade = True
                         _pauseable_sleep(self, 2)
                         continue
                     log("Phase5: New storage placement failed - continuing to Phase B")
@@ -2687,7 +2687,7 @@ class HomeBattleSession:
                     if _do_upgrade_confirm(storage_coords):
                         log(f"Phase5: Storage upgraded (iteration {iteration}) - waiting 2s then re-checking conditions")
                         upgraded_anything = True
-                        Autoclash._default_session.phase5_did_upgrade = True
+                        self.phase5_did_upgrade = True
                         _pauseable_sleep(self, 2)
                         continue
                     log("Phase5: Storage upgrade failed - continuing to Phase B")
@@ -2741,7 +2741,7 @@ class HomeBattleSession:
                     if _do_place_new_building(new_accepted_coords):
                         log(f"Phase5: New building placed on attempt {_place_attempt} (iteration {iteration}) - waiting 2s")
                         upgraded_anything = True
-                        Autoclash._default_session.phase5_did_upgrade = True
+                        self.phase5_did_upgrade = True
                         _placement_success = True
                         _pauseable_sleep(self, 2)
                         break
@@ -2854,7 +2854,7 @@ class HomeBattleSession:
             if _do_upgrade_confirm(other_coords):
                 log(f"upgrade_account: Building upgraded (iteration {iteration}) — waiting 2s then re-checking")
                 upgraded_anything = True
-                Autoclash._default_session.phase5_did_upgrade = True
+                self.phase5_did_upgrade = True
                 _pauseable_sleep(self, 2)
                 continue
             else:
@@ -3001,7 +3001,7 @@ class HomeBattleSession:
 
         iteration = 0
         upgraded_anything = False
-        Autoclash._default_session.phase5_did_upgrade = False
+        self.phase5_did_upgrade = False
         nothing_found_to_upgrade = False
 
         while not self.stop_requested:
@@ -3052,7 +3052,7 @@ class HomeBattleSession:
                     log(f"Rush Phase5: New storage to place at y={storage_y}")
                     if _do_place_new_building(storage_coords):
                         upgraded_anything = True
-                        Autoclash._default_session.phase5_did_upgrade = True
+                        self.phase5_did_upgrade = True
                         _pauseable_sleep(self, 2)
                         continue
                     log("Rush Phase5: New storage placement failed — continuing to Phase B")
@@ -3060,7 +3060,7 @@ class HomeBattleSession:
                     log(f"Rush Phase5: Existing storage to upgrade at y={storage_y}")
                     if _do_upgrade_confirm(storage_coords):
                         upgraded_anything = True
-                        Autoclash._default_session.phase5_did_upgrade = True
+                        self.phase5_did_upgrade = True
                         _pauseable_sleep(self, 2)
                         continue
                     log("Rush Phase5: Storage upgrade failed — continuing to Phase B")
@@ -3113,7 +3113,7 @@ class HomeBattleSession:
                     if _do_place_new_building(new_accepted_coords):
                         log(f"Rush Phase5: New building placed on attempt {_place_attempt} (iteration {iteration})")
                         upgraded_anything = True
-                        Autoclash._default_session.phase5_did_upgrade = True
+                        self.phase5_did_upgrade = True
                         _placement_success = True
                         _pauseable_sleep(self, 2)
                         break
@@ -3193,7 +3193,7 @@ class HomeBattleSession:
             if _do_upgrade_confirm(th_coords):
                 log(f"Rush Phase5: Town Hall upgraded (iteration {iteration})")
                 upgraded_anything = True
-                Autoclash._default_session.phase5_did_upgrade = True
+                self.phase5_did_upgrade = True
                 _pauseable_sleep(self, 2)
                 # Check for finish_rush popup — indicates we've hit the target TH level
                 finish_rush_coords = find_template("finish_rush.png", confidence=0.80)
