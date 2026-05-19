@@ -2645,6 +2645,15 @@ class HomeBattleSession:
                 log("Phase5: No free builder available - exiting Phase 5")
                 break
 
+            goblin_builder_coords = find_template(
+                "goblin_builder.png",
+                confidence=0.8,
+                search_box=(835, 2, 1094, 129),
+            )
+            if goblin_builder_coords:
+                log("Phase5: Goblin builder detected — all regular builders busy, exiting Phase 5")
+                break
+
             log("Phase5: Conditions met (both full, free builder) - opening upgrade menu...")
             click_with_jitter(907, 50)
             time.sleep(0.3)
@@ -3006,6 +3015,15 @@ class HomeBattleSession:
             )
             if no_builders_coords:
                 log("Rush Phase5: No free builder — exiting")
+                break
+
+            goblin_builder_coords = find_template(
+                "goblin_builder.png",
+                confidence=0.8,
+                search_box=(835, 2, 1094, 129),
+            )
+            if goblin_builder_coords:
+                log("Rush Phase5: Goblin builder detected — all regular builders busy, exiting Phase 5")
                 break
 
             log("Rush Phase5: Conditions met — opening upgrade menu...")
