@@ -696,6 +696,9 @@ class UpgradeAccountsPage(QWidget):
         _page_lbl.move(5, 5)
         _page_lbl.raise_()
 
+        # Restore previous selections
+        self.load_state()
+
     def account_behaviours(self) -> Dict[str, int]:
         """Return {account_name: behaviour_constant} for every ticked account."""
         result: Dict[str, int] = {}
@@ -704,6 +707,35 @@ class UpgradeAccountsPage(QWidget):
                 combo_index = self._combos[name].currentIndex()
                 result[name] = self._INDEX_TO_BEHAVIOUR.get(combo_index, UPGRADE_BEHAVIOUR_UPGRADE)
         return result
+
+    def save_state(self) -> None:
+        """Persist checkbox and combo state to upgrade_accounts_state.json."""
+        state = {}
+        for name in ALL_APPROVED_ACCOUNTS:
+            state[name] = {
+                "checked": self._checkboxes[name].isChecked(),
+                "combo_index": self._combos[name].currentIndex(),
+            }
+        try:
+            path = Path(__file__).parent / "upgrade_accounts_state.json"
+            path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        except Exception as e:
+            print(f"UpgradeAccountsPage: failed to save state: {e}")
+
+    def load_state(self) -> None:
+        """Restore checkbox and combo state from upgrade_accounts_state.json."""
+        try:
+            path = Path(__file__).parent / "upgrade_accounts_state.json"
+            if not path.exists():
+                return
+            state = json.loads(path.read_text(encoding="utf-8"))
+            for name, data in state.items():
+                if name in self._checkboxes:
+                    self._checkboxes[name].setChecked(data.get("checked", False))
+                if name in self._combos:
+                    self._combos[name].setCurrentIndex(data.get("combo_index", 1))
+        except Exception as e:
+            print(f"UpgradeAccountsPage: failed to load state: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2507,6 +2539,7 @@ class AutoclashGUI(QMainWindow):
     # ------------------------------------------------------------------
 
     def _start_upgrade_accounts(self):
+        self.pg_upgrade_accounts.save_state()
         raw_behaviours = self.pg_upgrade_accounts.account_behaviours()
         if not raw_behaviours:
             QMessageBox.warning(self, "No Accounts", "Select at least one account for Upgrade Accounts mode")
