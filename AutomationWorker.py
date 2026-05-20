@@ -956,7 +956,8 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
                             _gold = snapshot.get("gold", 0) if isinstance(snapshot, dict) else 0
                             _elixir = snapshot.get("elixir", 0) if isinstance(snapshot, dict) else 0
                             _dark = snapshot.get("dark_elixir", snapshot.get("dark", 0)) if isinstance(snapshot, dict) else 0
-                            bot_reporter.report_battle_complete(account_name, _gold, _elixir, _dark, run_count)
+                            _stars = snapshot.get("stars", 0) if isinstance(snapshot, dict) else 0
+                            bot_reporter.report_battle_complete(account_name, _gold, _elixir, _dark, run_count, stars=_stars)
                         except Exception as e:
                             log(f"[ERROR] saving stats: {e}")
                     else:
@@ -1344,8 +1345,9 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 _gold = snapshot.get("gold", 0) if isinstance(snapshot, dict) else 0
                 _elixir = snapshot.get("elixir", 0) if isinstance(snapshot, dict) else 0
                 _dark = snapshot.get("dark_elixir", snapshot.get("dark", 0)) if isinstance(snapshot, dict) else 0
+                _stars = snapshot.get("stars", 0) if isinstance(snapshot, dict) else 0
                 account_attack_counts[account_name] = account_attack_counts.get(account_name, 0) + 1
-                bot_reporter.report_battle_complete(account_name, _gold, _elixir, _dark, account_attack_counts[account_name])
+                bot_reporter.report_battle_complete(account_name, _gold, _elixir, _dark, account_attack_counts[account_name], stars=_stars)
 
             self.overlay_draw.emit([], f"Cycle Accounts — Battle {battle_index} complete")
             self.status_update.emit("Idle", f"Battle {battle_index} completed on '{target_account}'")
@@ -2598,8 +2600,9 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                 _gold = snapshot.get("gold", 0) if isinstance(snapshot, dict) else 0
                 _elixir = snapshot.get("elixir", 0) if isinstance(snapshot, dict) else 0
                 _dark = snapshot.get("dark_elixir", snapshot.get("dark", 0)) if isinstance(snapshot, dict) else 0
+                _stars = snapshot.get("stars", 0) if isinstance(snapshot, dict) else 0
                 account_attack_counts[account_name] = account_attack_counts.get(account_name, 0) + 1
-                bot_reporter.report_battle_complete(account_name, _gold, _elixir, _dark, account_attack_counts[account_name])
+                bot_reporter.report_battle_complete(account_name, _gold, _elixir, _dark, account_attack_counts[account_name], stars=_stars)
 
             # Phase 5 — depends on per-account behaviour
             self.status_update.emit("Loading", "Waiting for Phase 5 to load...")
