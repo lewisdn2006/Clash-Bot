@@ -2653,6 +2653,7 @@ class HomeBattleSession:
             )
             if goblin_builder_coords:
                 log("Phase5: Goblin builder detected — all regular builders busy, exiting Phase 5")
+                nothing_found_to_upgrade = True
                 break
 
             log("Phase5: Conditions met (both full, free builder) - opening upgrade menu...")
@@ -3030,6 +3031,7 @@ class HomeBattleSession:
             )
             if goblin_builder_coords:
                 log("Rush Phase5: Goblin builder detected — all regular builders busy, exiting Phase 5")
+                nothing_found_to_upgrade = True
                 break
 
             log("Rush Phase5: Conditions met — opening upgrade menu...")
