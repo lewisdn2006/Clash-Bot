@@ -188,6 +188,28 @@ def _normalize_ocr_confidence(raw_conf: float) -> float:
     return max(0.0, min(1.0, raw_conf / 100.0))
 
 
+def _apply_ocr_corrections(text_norm: str) -> str:
+    """Fix known character-level OCR confusion patterns in the account list.
+
+    These substitutions correct consistent misreads observed in diagnostic output:
+      - D → O at the start of 'DJ' prefix (capital D rendered as O by Tesseract)
+      - ll → li in 'Bill' (double-l collapsed to l+i)
+      - ie → l in 'Siennaa' (BrokenSiennaa always read as BrokenSlennaa)
+    Patterns are specific enough to avoid false positives on other account names.
+    """
+    # Fix D→O confusion at the DJ prefix (e.g. ojbillgates32 → djbillgates32)
+    if text_norm.startswith("oj"):
+        text_norm = "dj" + text_norm[2:]
+    # Fix ll→li in 'Bill' context (e.g. djbiligates → djbillgates)
+    text_norm = text_norm.replace("djbiligates", "djbillgates")
+    # Fix ll→lll or lI→ll variants (e.g. djbiiigates, djbilligates)
+    text_norm = text_norm.replace("djbiiigates", "djbillgates")
+    text_norm = text_norm.replace("djbilligates", "djbillgates")
+    # Fix ie→l in BrokenSiennaa (brokenslennaa → brokensiennaa)
+    text_norm = text_norm.replace("brokenslen", "brokensien")
+    return text_norm
+
+
 def _preprocess_for_ocr(pil_image) -> np.ndarray:
     image_np = np.array(pil_image)
     gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
@@ -295,6 +317,7 @@ def _match_visible_switch_accounts(candidates: Dict[str, str]) -> dict:
 
         for row in ocr_rows:
             row_norm = row["text_norm"]
+            row_norm = _apply_ocr_corrections(row_norm)
             if len(row_norm) < 4:
                 continue  # Skip short fragments — single chars/junk always substring-match account names
             # When a fragment is a substring of the target, require it to cover ≥80% of the

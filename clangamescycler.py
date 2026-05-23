@@ -250,6 +250,8 @@ def _ocr_tsv_records_in_region(region: Tuple[int, int, int, int]) -> List[Dict[s
             [AC.TESSERACT_PATH, image_path, "stdout", "tsv"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=15,
         )
         if result.returncode != 0:
@@ -327,6 +329,28 @@ def _normalize_ocr_confidence(raw_conf: float) -> float:
     return max(0.0, min(1.0, raw_conf / 100.0))
 
 
+def _apply_ocr_corrections(text_norm: str) -> str:
+    """Fix known character-level OCR confusion patterns in the account list.
+
+    These substitutions correct consistent misreads observed in diagnostic output:
+      - D → O at the start of 'DJ' prefix (capital D rendered as O by Tesseract)
+      - ll → li in 'Bill' (double-l collapsed to l+i)
+      - ie → l in 'Siennaa' (BrokenSiennaa always read as BrokenSlennaa)
+    Patterns are specific enough to avoid false positives on other account names.
+    """
+    # Fix D→O confusion at the DJ prefix (e.g. ojbillgates32 → djbillgates32)
+    if text_norm.startswith("oj"):
+        text_norm = "dj" + text_norm[2:]
+    # Fix ll→li in 'Bill' context (e.g. djbiligates → djbillgates)
+    text_norm = text_norm.replace("djbiligates", "djbillgates")
+    # Fix ll→lll or lI→ll variants (e.g. djbiiigates, djbilligates)
+    text_norm = text_norm.replace("djbiiigates", "djbillgates")
+    text_norm = text_norm.replace("djbilligates", "djbillgates")
+    # Fix ie→l in BrokenSiennaa (brokenslennaa → brokensiennaa)
+    text_norm = text_norm.replace("brokenslen", "brokensien")
+    return text_norm
+
+
 def _match_visible_switch_accounts(candidates: Dict[str, str]) -> Dict[str, Dict[str, object]]:
     """Return visible candidate accounts keyed by ingame name with click center and OCR metadata."""
     visible: Dict[str, Dict[str, object]] = {}
@@ -339,6 +363,7 @@ def _match_visible_switch_accounts(candidates: Dict[str, str]) -> Dict[str, Dict
 
         for row in ocr_rows:
             row_norm = row["text_norm"]  # type: ignore[index]
+            row_norm = _apply_ocr_corrections(row_norm)
             if len(row_norm) < 4:
                 continue  # skip short fragments — single chars always substring-match long names
             # When a fragment is a substring of the target, require it to cover ≥80% of the

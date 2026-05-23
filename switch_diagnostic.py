@@ -64,6 +64,15 @@ def _normalize_ocr_confidence(raw_conf: float) -> float:
         return max(0.0, min(1.0, raw_conf))
     return max(0.0, min(1.0, raw_conf / 100.0))
 
+def _apply_ocr_corrections(text_norm: str) -> str:
+    if text_norm.startswith("oj"):
+        text_norm = "dj" + text_norm[2:]
+    text_norm = text_norm.replace("djbiligates", "djbillgates")
+    text_norm = text_norm.replace("djbiiigates", "djbillgates")
+    text_norm = text_norm.replace("djbilligates", "djbillgates")
+    text_norm = text_norm.replace("brokenslen", "brokensien")
+    return text_norm
+
 def _preprocess_for_ocr(pil_image) -> np.ndarray:
     image_np = np.array(pil_image)
     gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
@@ -101,6 +110,8 @@ def _ocr_tsv_records_in_region(region, save_prefix=None) -> list:
             [Autoclash.TESSERACT_PATH, image_path, "stdout", "tsv"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=15,
         )
         if result.returncode != 0:
@@ -201,6 +212,7 @@ def diagnostic_scan(scan_index: int, candidates: dict) -> dict:
 
         for row in ocr_rows:
             row_norm = row["text_norm"]
+            row_norm = _apply_ocr_corrections(row_norm)
             if len(row_norm) < 4:
                 continue
             fragment_match = (row_norm in target_norm and len(row_norm) >= len(target_norm) * 0.8)
