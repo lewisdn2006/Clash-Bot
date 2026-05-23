@@ -292,33 +292,109 @@ def _switch_to_specific_account(
 ) -> bool:
     """
     Switch to one specific account via the in-game switch menu.
-    Draws the OCR match on the overlay so you can see exactly what was found.
-    Returns True on success.
+
+    Uses settings.png visibility to determine whether the switch menu is already
+    open before trying to open it:
+      - settings.png visible   → home screen → open switch menu, then verify it
+                                 opened by checking settings.png disappears.
+      - settings.png not found → switch menu is likely already open from a
+                                 previous failed switch → skip open, scroll directly.
+
+    NEVER presses Escape — on the home screen that opens "Exit Game?" dialog.
+    Returns True on success, False on failure (switch menu left open on failure).
     """
     # Look up the switch menu display name — fall back to account_name itself
-    # if not in the map (allows any account selected in the GUI to be used)
     switch_display_name = CG_MASTER_SWITCH_NAMES.get(account_name, account_name)
     AC.log(f"CG Master: Switching to '{account_name}' (switch name: '{switch_display_name}')")
     candidate_map = {account_name: switch_display_name}
-    # Wait for the home village to be fully loaded before opening the
-    # switch menu. This prevents the bot from failing immediately after
-    # a hard reset when the game is still on a loading/title screen.
-    AC.log("CG Master: Waiting for settings.png (game load check)…")
-    game_ready = False
-    for _load_attempt in range(60):
-        if stop_fn():
+
+    # ------------------------------------------------------------------
+    # Step 1: Determine state and open switch menu if needed
+    # ------------------------------------------------------------------
+    AC.log("CG Master: Checking if switch menu needs opening (looking for settings.png)…")
+    settings_coords = AC.find_template("settings.png")
+
+    if settings_coords:
+        # Home screen detected — open the switch menu.
+        AC.log("CG Master: Home screen detected — opening switch menu")
+        _menu_opened = False
+        for _open_attempt in range(3):
+            if stop_fn():
+                return False
+            AC.click_with_jitter(*settings_coords)
+            time.sleep(1.0)
+            if stop_fn():
+                return False
+            AC.click_with_jitter(1245, 244)   # Switch ID / Switch Account button
+            time.sleep(1.5)
+            if stop_fn():
+                return False
+            # Verify menu opened — settings.png should now be hidden by the overlay
+            settings_after = AC.find_template("settings.png")
+            if not settings_after:
+                AC.log(f"CG Master: Switch menu open (settings.png gone, attempt {_open_attempt + 1})")
+                _menu_opened = True
+                break
+            AC.log(f"CG Master: Switch menu did not open on attempt {_open_attempt + 1} (settings.png still visible)")
+            settings_coords = settings_after   # use fresh coords for next attempt
+            time.sleep(1.0)
+
+        if not _menu_opened:
+            AC.log("CG Master: Failed to open switch menu after 3 attempts — aborting")
             return False
-        if AC.find_template("settings.png"):
-            game_ready = True
-            break
-        time.sleep(1.0)
-    if not game_ready:
-        AC.log("CG Master: settings.png not found after 60s — game may not have loaded")
-        return False
-    AC.log("CG Master: Game ready — opening switch menu")
 
-    CGC._open_account_switch_menu()
+    else:
+        # settings.png not visible — could be:
+        #   a) Switch menu is already open from a previous failed switch (most likely)
+        #   b) Game is still loading after a hard reset (rare, but possible)
+        # Wait up to 30s for settings.png to appear. If it does, open the menu
+        # properly. If it never appears, assume the switch menu is already open
+        # and proceed directly to scrolling.
+        AC.log("CG Master: settings.png not visible — waiting up to 30s (game load or switch menu already open)…")
+        appeared_coords = None
+        for _wait_attempt in range(15):   # 15 × 2s = 30s
+            if stop_fn():
+                return False
+            settings_coords = AC.find_template("settings.png")
+            if settings_coords:
+                appeared_coords = settings_coords
+                break
+            time.sleep(2.0)
 
+        if appeared_coords:
+            # Home screen appeared — open switch menu
+            AC.log("CG Master: Home screen appeared — opening switch menu")
+            _menu_opened = False
+            for _open_attempt in range(3):
+                if stop_fn():
+                    return False
+                AC.click_with_jitter(*appeared_coords)
+                time.sleep(1.0)
+                if stop_fn():
+                    return False
+                AC.click_with_jitter(1245, 244)
+                time.sleep(1.5)
+                if stop_fn():
+                    return False
+                settings_after = AC.find_template("settings.png")
+                if not settings_after:
+                    AC.log(f"CG Master: Switch menu open (attempt {_open_attempt + 1})")
+                    _menu_opened = True
+                    break
+                AC.log(f"CG Master: Switch menu did not open on attempt {_open_attempt + 1} (settings.png still visible)")
+                appeared_coords = settings_after
+                time.sleep(1.0)
+
+            if not _menu_opened:
+                AC.log("CG Master: Failed to open switch menu after 3 attempts — aborting")
+                return False
+        else:
+            # settings.png not found after 30s — assume switch menu is already open
+            AC.log("CG Master: settings.png not found after 30s — assuming switch menu already open, proceeding to scroll")
+
+    # ------------------------------------------------------------------
+    # Step 2: Scroll and find the account
+    # ------------------------------------------------------------------
     def find_with_scroll(direction: str) -> dict:
         for scan_idx in range(51):
             if stop_fn():
@@ -353,8 +429,28 @@ def _switch_to_specific_account(
 
     if not visible:
         AC.log(f"CG Master: Could not find '{account_name}' in switch menu")
+        # Do NOT press Escape — pressing Escape on the home screen opens "Exit Game?"
+        # The switch menu stays open. The next call to _switch_to_specific_account
+        # will see settings.png is not visible and skip the open step, scrolling
+        # directly. The list position is already near the top from the second-pass
+        # reset scroll above.
+        # Save a diagnostic screenshot for post-hoc debugging.
+        try:
+            import os
+            import datetime
+            debug_dir = os.path.join(os.path.dirname(__file__), "debug_screenshots")
+            os.makedirs(debug_dir, exist_ok=True)
+            ts = datetime.datetime.now().strftime("%H%M%S")
+            shot = _vision.safe_screenshot()
+            shot.save(os.path.join(debug_dir, f"{ts}_switch_not_found_{account_name}.png"))
+            AC.log(f"CG Master: Saved diagnostic screenshot → {ts}_switch_not_found_{account_name}.png")
+        except Exception as _exc:
+            AC.log(f"CG Master: Failed to save diagnostic screenshot: {_exc}")
         return False
 
+    # ------------------------------------------------------------------
+    # Step 3: Click the matched account entry
+    # ------------------------------------------------------------------
     _, data = next(iter(visible.items()))
     AC.log(
         f"CG Master: Switching to '{account_name}' — "
