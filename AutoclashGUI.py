@@ -1609,38 +1609,102 @@ def _format_seconds(seconds: float) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 class ClanGamesAccountSelectPage(QWidget):
+    """Per-account Clan Games configuration screen.
+
+    Each account gets a row with:
+      - checkbox   (include / exclude)
+      - label      (account name)
+      - mode combo ("Get Points" or "Cycle Only")
+      - ↑ / ↓     (reorder priority)
+
+    State persists across restarts via clan_games_state.json.
+    """
+
+    _MODE_LABELS = [
+        "Get Points",   # index 0
+        "Cycle Only",   # index 1
+    ]
+
     def __init__(self, accounts: list, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
+        self._accounts_source = list(accounts)
 
-        layout.addWidget(_title("Clan Games"))
-        layout.addWidget(_subtitle(
-            "Select accounts to include in the Clan Games Master Bot.\n"
-            "The bot will attack and complete challenges on each selected account."
+        outer = QVBoxLayout(self)
+        outer.setSpacing(10)
+
+        outer.addWidget(_title("Clan Games"))
+        outer.addWidget(_subtitle(
+            "Tick accounts to include. Set mode per account:\n"
+            "Get Points — bot attacks and accumulates clan games points.\n"
+            "Cycle Only — bot only refreshes (trashes) invalid challenges; no points."
         ))
 
-        self.checkboxes: Dict[str, QCheckBox] = {}
-        grid = QGridLayout()
-        for i, name in enumerate(sorted(accounts)):
-            cb = QCheckBox(name)
-            self.checkboxes[name] = cb
-            grid.addWidget(cb, i // 2, i % 2)
-        layout.addLayout(grid)
+        # --- Scrollable account list ---
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
 
-        self.select_all_btn = QPushButton("Select All")
-        self.select_all_btn.setFixedWidth(240)
-        self.select_all_btn.clicked.connect(self._toggle_all)
-        layout.addWidget(self.select_all_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        inner_widget = QWidget()
+        inner_layout = QVBoxLayout(inner_widget)
+        inner_layout.setSpacing(4)
+        inner_layout.setContentsMargins(4, 4, 4, 4)
+
+        self._checkboxes: Dict[str, QCheckBox] = {}
+        self._combos: Dict[str, QComboBox] = {}
+        self._row_widgets: Dict[str, QWidget] = {}
+        self._order: List[str] = list(accounts)
+
+        for name in accounts:
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setSpacing(8)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+
+            cb = QCheckBox()
+            cb.setFixedWidth(20)
+            self._checkboxes[name] = cb
+
+            lbl = QLabel(name)
+            lbl.setMinimumWidth(150)
+
+            combo = QComboBox()
+            combo.addItems(self._MODE_LABELS)
+            combo.setCurrentIndex(0)
+            combo.setFixedWidth(130)
+            self._combos[name] = combo
+
+            up_btn = QPushButton("↑")
+            up_btn.setFixedWidth(28)
+            up_btn.setFixedHeight(24)
+            up_btn.clicked.connect(lambda *_, n=name: self._move_up(n))
+
+            down_btn = QPushButton("↓")
+            down_btn.setFixedWidth(28)
+            down_btn.setFixedHeight(24)
+            down_btn.clicked.connect(lambda *_, n=name: self._move_down(n))
+
+            row_layout.addWidget(cb)
+            row_layout.addWidget(lbl)
+            row_layout.addWidget(combo)
+            row_layout.addWidget(up_btn)
+            row_layout.addWidget(down_btn)
+            row_layout.addStretch()
+
+            self._row_widgets[name] = row_widget
+
+        self._inner_layout = inner_layout
+        self._rebuild_list()
+        scroll.setWidget(inner_widget)
+        outer.addWidget(scroll, stretch=1)
 
         self.start_btn = QPushButton("Start Clan Games")
         self.start_btn.setObjectName("primary_btn")
         self.start_btn.setFixedWidth(240)
-        layout.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         self.back_btn = QPushButton("Back")
         self.back_btn.setFixedWidth(240)
-        layout.addWidget(self.back_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(self.back_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         _page_lbl = QLabel("Page 16", self)
         _page_lbl.setStyleSheet("color: #555; font-size: 9px;")
@@ -1648,14 +1712,79 @@ class ClanGamesAccountSelectPage(QWidget):
         _page_lbl.move(5, 5)
         _page_lbl.raise_()
 
-    def _toggle_all(self):
-        all_checked = all(cb.isChecked() for cb in self.checkboxes.values())
-        for cb in self.checkboxes.values():
-            cb.setChecked(not all_checked)
-        self.select_all_btn.setText("Deselect All" if not all_checked else "Select All")
+        self.load_state()
 
-    def selected_accounts(self) -> List[str]:
-        return [name for name, cb in self.checkboxes.items() if cb.isChecked()]
+    def _rebuild_list(self) -> None:
+        while self._inner_layout.count():
+            self._inner_layout.takeAt(0)
+        for name in self._order:
+            self._inner_layout.addWidget(self._row_widgets[name])
+        self._inner_layout.addStretch()
+
+    def _move_up(self, name: str) -> None:
+        idx = self._order.index(name)
+        if idx > 0:
+            self._order[idx], self._order[idx - 1] = self._order[idx - 1], self._order[idx]
+            self._rebuild_list()
+
+    def _move_down(self, name: str) -> None:
+        idx = self._order.index(name)
+        if idx < len(self._order) - 1:
+            self._order[idx], self._order[idx + 1] = self._order[idx + 1], self._order[idx]
+            self._rebuild_list()
+
+    def account_modes_ordered(self) -> Dict[str, str]:
+        """Return {account_name: mode} for every ticked account, in display order.
+
+        mode is "points" or "cycle".
+        """
+        result: Dict[str, str] = {}
+        for name in self._order:
+            if self._checkboxes[name].isChecked():
+                mode = "cycle" if self._combos[name].currentIndex() == 1 else "points"
+                result[name] = mode
+        return result
+
+    def save_state(self) -> None:
+        state = {
+            "order": self._order,
+            "accounts": {
+                name: {
+                    "checked": self._checkboxes[name].isChecked(),
+                    "combo_index": self._combos[name].currentIndex(),
+                }
+                for name in self._accounts_source
+            },
+        }
+        try:
+            path = Path(__file__).parent / "clan_games_state.json"
+            path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        except Exception as e:
+            print(f"ClanGamesAccountSelectPage: failed to save state: {e}")
+
+    def load_state(self) -> None:
+        try:
+            path = Path(__file__).parent / "clan_games_state.json"
+            if not path.exists():
+                return
+            state = json.loads(path.read_text(encoding="utf-8"))
+
+            saved_order = state.get("order", [])
+            known = set(self._accounts_source)
+            restored = [a for a in saved_order if a in known]
+            for a in self._accounts_source:
+                if a not in restored:
+                    restored.append(a)
+            self._order = restored
+            self._rebuild_list()
+
+            for name, data in state.get("accounts", {}).items():
+                if name in self._checkboxes:
+                    self._checkboxes[name].setChecked(data.get("checked", False))
+                if name in self._combos:
+                    self._combos[name].setCurrentIndex(data.get("combo_index", 0))
+        except Exception as e:
+            print(f"ClanGamesAccountSelectPage: failed to load state: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2798,10 +2927,12 @@ class AutoclashGUI(QMainWindow):
     # ------------------------------------------------------------------
 
     def _start_clan_games(self):
-        selected = self.pg_clan_games_select.selected_accounts()
-        if not selected:
+        account_modes = self.pg_clan_games_select.account_modes_ordered()
+        if not account_modes:
             QMessageBox.warning(self, "No Accounts Selected", "Please select at least one account.")
             return
+        self.pg_clan_games_select.save_state()
+        selected = list(account_modes.keys())
         log(f"GUI: Starting Clan Games Master Bot — accounts: {', '.join(selected)}")
         self._cgm_completed: list = []
         self.pg_clan_games.mode_label.setText("—")
@@ -2813,6 +2944,7 @@ class AutoclashGUI(QMainWindow):
             account_settings_getter=self._get_account_settings,
             apply_settings_fn=self._apply_settings_to_runtime,
             selected_accounts=selected,
+            account_modes=account_modes,
         )
         self.worker.status_update.connect(self._on_cg_status)
         self.worker.mode_changed.connect(self._on_cg_mode_changed)

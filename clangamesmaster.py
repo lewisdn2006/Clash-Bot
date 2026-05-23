@@ -487,6 +487,7 @@ def run_master_bot(
     overlay_fn: Optional[Callable[[list, str], None]] = None,
     hard_reset_fn: Optional[Callable[[], None]] = None,
     attack_accounts: Optional[List[str]] = None,
+    account_modes: Optional[Dict[str, str]] = None,
 ) -> None:
     """
     Main entry point for the Clan Games Master Bot.
@@ -507,7 +508,12 @@ def run_master_bot(
     last_trash_by_ingame: Dict[str, float]  = {}
     attack_idx = 0
     _switch_fail_count = 0
-    _accounts = attack_accounts if attack_accounts is not None else ATTACK_ACCOUNTS
+    _modes = account_modes or {}
+    _all_accounts = attack_accounts if attack_accounts is not None else ATTACK_ACCOUNTS
+    # "Get Points" accounts go through the attack loop; "Cycle Only" accounts only cycle.
+    _attack_accounts = [a for a in _all_accounts if _modes.get(a, "points") == "points"]
+    # All selected accounts (both modes) participate in challenge cycling.
+    _cycle_accounts  = _all_accounts
     account_attack_counts: Dict[str, int] = {}
     account_upgrade_counts: Dict[str, int] = {}
 
@@ -522,21 +528,21 @@ def run_master_bot(
         while not stop_fn():
             # Advance past completed accounts
             while (
-                attack_idx < len(_accounts)
-                and _accounts[attack_idx] in completed
+                attack_idx < len(_attack_accounts)
+                and _attack_accounts[attack_idx] in completed
             ):
                 attack_idx += 1
 
-            if attack_idx >= len(_accounts):
-                # All accounts completed — final cycling pass then stop
+            if attack_idx >= len(_attack_accounts):
+                # All Get Points accounts completed — final cycling pass then stop
                 AC.log("CG Master: All accounts completed — running final cycling pass")
                 status_fn("Final Cycling", "All accounts done — clearing remaining bad challenges…")
-                run_cycling_phase(last_trash_by_ingame, stop_fn, status_fn, overlay_fn, attack_accounts=_accounts)
+                run_cycling_phase(last_trash_by_ingame, stop_fn, status_fn, overlay_fn, attack_accounts=_cycle_accounts)
                 AC.log("CG Master: Final cycling done — stopping")
                 status_fn("Done", "All accounts completed and all challenges cleared!")
                 break
 
-            current_account = _accounts[attack_idx]
+            current_account = _attack_accounts[attack_idx]
 
             # Switch to this account
             status_fn("Switching", f"Switching to {current_account}…")
@@ -600,7 +606,7 @@ def run_master_bot(
                     AC.log(f"CG Master: No valid challenges on '{current_account}' — cycling")
                     status_fn("Cycling", "No valid challenges — entering cycling phase…")
 
-                    cycle_result = run_cycling_phase(last_trash_by_ingame, stop_fn, status_fn, overlay_fn, hard_reset_fn)
+                    cycle_result = run_cycling_phase(last_trash_by_ingame, stop_fn, status_fn, overlay_fn, hard_reset_fn, attack_accounts=_cycle_accounts)
                     if cycle_result == RESULT_STOPPED or stop_fn():
                         break
 
