@@ -27,15 +27,15 @@ import vision as _vision
 # Each entry is (name, click_coord).  Capital Peak is checked last because
 # it is only available once all other districts are completed.
 DISTRICTS = [
-    ("Goblin Mines",       (1217, 1012)),
-    ("Skeleton Park",      ( 870, 1029)),
-    ("Golem Quarry",       ( 552,  983)),
-    ("Dragon Cliffs",      (1286,  791)),
-    ("Builder's Workshop", (1068,  869)),
-    ("Balloon Lagoon",     ( 742,  833)),
-    ("Wizard Valley",      ( 932,  658)),
-    ("Barbarian Camp",     (1146,  586)),
-    ("Capital Peak",       ( 917,  380)),
+    ("Goblin Mines",       (1217,  992)),
+    ("Skeleton Park",      ( 870, 1009)),
+    ("Golem Quarry",       ( 552,  963)),
+    ("Dragon Cliffs",      (1286,  771)),
+    ("Builder's Workshop", (1068,  849)),
+    ("Balloon Lagoon",     ( 742,  813)),
+    ("Wizard Valley",      ( 932,  638)),
+    ("Barbarian Camp",     (1146,  566)),
+    ("Capital Peak",       ( 917,  360)),
 ]
 
 # Diamond (rhombus) deployment zone
@@ -222,6 +222,13 @@ def place_unit(
             if is_button_depleted(button_xy):
                 _status(status_fn, "Battle", f"Unit at {button_xy} depleted after {click_count} clicks")
                 break
+
+        # Re-select the button every 20 clicks if still not depleted —
+        # the game sometimes fails to register the initial selection click
+        if click_count % 20 == 0:
+            _status(status_fn, "Battle", f"Re-selecting unit at {button_xy} after {click_count} clicks")
+            Autoclash.click_with_jitter(*button_xy)
+            time.sleep(0.3)
 
     time.sleep(0.2)
 
@@ -464,15 +471,22 @@ def run_battle(
     for i in range(5):
         if _stopped(stop_fn):
             return
-        _drag_once(duration=0.35)
+        _drag_once(duration=0.7)
         try:
             Autoclash.scroll_down_api(Autoclash.WHEEL_DELTA * 2)
         except Exception:
             pyautogui.scroll(-abs(int(Autoclash.WHEEL_DELTA * 2)))
-        time.sleep(0.3)
+        time.sleep(0.6)
 
     if _stopped(stop_fn):
         return
+
+    # Press '1' to ensure the first unit slot is selected before clicking the button
+    try:
+        pyautogui.press('1')
+        time.sleep(0.2)
+    except Exception:
+        _log("run_battle: pyautogui.press('1') failed — continuing without keypress")
 
     # Deploy troops
     _status(status_fn, "Battle", "Placing troops…")

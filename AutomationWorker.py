@@ -2456,6 +2456,14 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
             try:
                 import keyboard as _kb
                 _kb.add_hotkey("space", self.stop)
+                _keyboard_registered = True
+                log("ClanCapitalWorker: space-stop enabled")
+            except Exception:
+                log("ClanCapitalWorker: keyboard module unavailable; space-stop disabled")
+
+            _ctrl_d_registered = False
+            try:
+                import keyboard as _kb_disconnect
                 def _on_cap_disconnect():
                     log("Ctrl+D pressed — disconnecting Remote Desktop...")
                     try:
@@ -2465,13 +2473,13 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
                             shell=True,
                             creationflags=subprocess.CREATE_NO_WINDOW,
                         )
-                    except Exception as e:
-                        log(f"WARNING: Failed to launch disconnect.bat: {e}")
-                _kb.add_hotkey("ctrl+d", _on_cap_disconnect)
-                _keyboard_registered = True
-                log("ClanCapitalWorker: space-stop and Ctrl+D disconnect enabled")
+                    except Exception as _e:
+                        log(f"WARNING: Failed to launch disconnect.bat: {_e}")
+                _kb_disconnect.add_hotkey("ctrl+d", _on_cap_disconnect)
+                _ctrl_d_registered = True
+                log("ClanCapitalWorker: Ctrl+D disconnect enabled")
             except Exception:
-                log("ClanCapitalWorker: keyboard module unavailable; space-stop disabled")
+                log("ClanCapitalWorker: keyboard module unavailable; Ctrl+D disabled")
 
             self.overlay_draw.emit([], "Capital Raid — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
@@ -2604,6 +2612,12 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
                 try:
                     import keyboard as _kb
                     _kb.remove_hotkey("space")
+                except Exception:
+                    pass
+            if _ctrl_d_registered:
+                try:
+                    import keyboard as _kb_disconnect
+                    _kb_disconnect.remove_hotkey("ctrl+d")
                 except Exception:
                     pass
             bot_reporter.stop()
