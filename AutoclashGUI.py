@@ -1913,42 +1913,104 @@ class ClanScouterProgressPage(QWidget):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class ClanCapitalConfigPage(QWidget):
-    """Account selection page for the Capital Raider."""
+    """Per-account Capital Raid configuration screen.
+
+    Each account gets a row with:
+      - checkbox   (include / exclude)
+      - label      (account name)
+      - clan combo ("Stay in Clan" or "Leave Clan")
+      - ↑ / ↓     (reorder priority)
+
+    State persists across restarts via capital_raid_state.json.
+    """
+
+    _CLAN_LABELS = [
+        "Stay in Clan",   # index 0 → "stay"
+        "Leave Clan",     # index 1 → "leave"
+    ]
 
     def __init__(self, accounts: list, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
+        _excluded = {"lewis", "williamleeming"}
+        filtered = [a for a in accounts if a not in _excluded]
+        self._accounts_source = list(filtered)
 
-        layout.addWidget(_title("Capital Raid"))
-        layout.addWidget(_subtitle(
-            "Select accounts to raid. The bot will switch to each account,\n"
-            "navigate to the Clan Capital, and attack all available districts."
+        outer = QVBoxLayout(self)
+        outer.setSpacing(10)
+
+        outer.addWidget(_title("Capital Raid"))
+        outer.addWidget(_subtitle(
+            "Tick accounts to include. Choose a clan option per account:\n"
+            "Stay in Clan — account stays in the main clan after raids.\n"
+            "Leave Clan — account leaves the main clan after raids."
         ))
 
-        self.checkboxes: Dict[str, QCheckBox] = {}
-        grid = QGridLayout()
-        _excluded = {"lewis", "williamleeming"}
-        for i, name in enumerate(sorted(a for a in accounts if a not in _excluded)):
-            cb = QCheckBox(name)
-            self.checkboxes[name] = cb
-            grid.addWidget(cb, i // 2, i % 2)
-        layout.addLayout(grid)
+        # --- Scrollable account list ---
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
 
-        layout.addWidget(_separator())
+        inner_widget = QWidget()
+        inner_layout = QVBoxLayout(inner_widget)
+        inner_layout.setSpacing(4)
+        inner_layout.setContentsMargins(4, 4, 4, 4)
 
-        self.return_clan_cb = QCheckBox("Return to main clan after raids")
-        self.return_clan_cb.setChecked(False)
-        layout.addWidget(self.return_clan_cb, alignment=Qt.AlignmentFlag.AlignLeft)
+        self._checkboxes: Dict[str, QCheckBox] = {}
+        self._combos: Dict[str, QComboBox] = {}
+        self._row_widgets: Dict[str, QWidget] = {}
+        self._order: List[str] = list(filtered)
+
+        for name in filtered:
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setSpacing(8)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+
+            cb = QCheckBox()
+            cb.setFixedWidth(20)
+            self._checkboxes[name] = cb
+
+            lbl = QLabel(name)
+            lbl.setMinimumWidth(150)
+
+            combo = QComboBox()
+            combo.addItems(self._CLAN_LABELS)
+            combo.setCurrentIndex(0)
+            combo.setFixedWidth(160)
+            self._combos[name] = combo
+
+            up_btn = QPushButton("↑")
+            up_btn.setFixedWidth(28)
+            up_btn.setFixedHeight(24)
+            up_btn.clicked.connect(lambda *_, n=name: self._move_up(n))
+
+            down_btn = QPushButton("↓")
+            down_btn.setFixedWidth(28)
+            down_btn.setFixedHeight(24)
+            down_btn.clicked.connect(lambda *_, n=name: self._move_down(n))
+
+            row_layout.addWidget(cb)
+            row_layout.addWidget(lbl)
+            row_layout.addWidget(combo)
+            row_layout.addWidget(up_btn)
+            row_layout.addWidget(down_btn)
+            row_layout.addStretch()
+
+            self._row_widgets[name] = row_widget
+
+        self._inner_layout = inner_layout
+        self._rebuild_list()
+        scroll.setWidget(inner_widget)
+        outer.addWidget(scroll, stretch=1)
 
         self.start_btn = QPushButton("Start Capital Raid")
         self.start_btn.setObjectName("primary_btn")
         self.start_btn.setFixedWidth(240)
-        layout.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         self.back_btn = QPushButton("Back")
         self.back_btn.setFixedWidth(240)
-        layout.addWidget(self.back_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(self.back_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         _page_lbl = QLabel("Page 12", self)
         _page_lbl.setStyleSheet("color: #555; font-size: 9px;")
@@ -1956,11 +2018,76 @@ class ClanCapitalConfigPage(QWidget):
         _page_lbl.move(5, 5)
         _page_lbl.raise_()
 
-    def selected_accounts(self) -> List[str]:
-        return [name for name, cb in self.checkboxes.items() if cb.isChecked()]
+        self.load_state()
 
-    def return_to_main_clan_enabled(self) -> bool:
-        return self.return_clan_cb.isChecked()
+    def _rebuild_list(self) -> None:
+        while self._inner_layout.count():
+            self._inner_layout.takeAt(0)
+        for name in self._order:
+            self._inner_layout.addWidget(self._row_widgets[name])
+        self._inner_layout.addStretch()
+
+    def _move_up(self, name: str) -> None:
+        idx = self._order.index(name)
+        if idx > 0:
+            self._order[idx], self._order[idx - 1] = self._order[idx - 1], self._order[idx]
+            self._rebuild_list()
+
+    def _move_down(self, name: str) -> None:
+        idx = self._order.index(name)
+        if idx < len(self._order) - 1:
+            self._order[idx], self._order[idx + 1] = self._order[idx + 1], self._order[idx]
+            self._rebuild_list()
+
+    def selected_account_options(self) -> Dict[str, str]:
+        """Return {account_name: 'stay'|'leave'} for every ticked account, in display order."""
+        result: Dict[str, str] = {}
+        for name in self._order:
+            if self._checkboxes[name].isChecked():
+                opt = "leave" if self._combos[name].currentIndex() == 1 else "stay"
+                result[name] = opt
+        return result
+
+    def save_state(self) -> None:
+        state = {
+            "order": self._order,
+            "accounts": {
+                name: {
+                    "checked": self._checkboxes[name].isChecked(),
+                    "combo_index": self._combos[name].currentIndex(),
+                }
+                for name in self._accounts_source
+            },
+        }
+        try:
+            path = Path(__file__).parent / "capital_raid_state.json"
+            path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        except Exception as e:
+            print(f"ClanCapitalConfigPage: failed to save state: {e}")
+
+    def load_state(self) -> None:
+        try:
+            path = Path(__file__).parent / "capital_raid_state.json"
+            if not path.exists():
+                return
+            state = json.loads(path.read_text(encoding="utf-8"))
+
+            saved_order = state.get("order", [])
+            known = set(self._accounts_source)
+            restored = [a for a in saved_order if a in known]
+            for a in self._accounts_source:
+                if a not in restored:
+                    restored.append(a)
+            self._order = restored
+            self._rebuild_list()
+
+            for name, data in state.get("accounts", {}).items():
+                if name in self._checkboxes:
+                    self._checkboxes[name].setChecked(data.get("checked", False))
+                if name in self._combos:
+                    self._combos[name].setCurrentIndex(data.get("combo_index", 0))
+        except Exception as e:
+            print(f"ClanCapitalConfigPage: failed to load state: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3029,22 +3156,25 @@ class AutoclashGUI(QMainWindow):
     # ------------------------------------------------------------------
 
     def _start_capital_raid(self):
-        selected = [
-            normalize_account_name(n) for n in self.pg_capital_config.selected_accounts()
+        raw_options = self.pg_capital_config.selected_account_options()
+        account_options = {
+            normalize_account_name(n): opt
+            for n, opt in raw_options.items()
             if normalize_account_name(n) in APPROVED_ACCOUNTS
-        ]
-        if not selected:
-            QMessageBox.warning(self, "No Accounts", "Select at least one account for Capital Raid")
+        }
+        if not account_options:
+            QMessageBox.warning(self, "No accounts", "Please select at least one account.")
             return
+
+        self.pg_capital_config.save_state()
 
         Autoclash._default_session.current_account_name = None
         Autoclash._default_session.stop_requested = False
 
         self.worker = ClanCapitalWorker(
-            selected_accounts=sorted(set(selected)),
+            account_clan_options=account_options,
             account_settings_getter=self._get_account_settings,
             apply_settings_fn=self._apply_settings_to_runtime,
-            return_to_main_clan=self.pg_capital_config.return_to_main_clan_enabled(),
         )
         self.worker.status_update.connect(self._on_capital_status)
         self.worker.overlay_draw.connect(self._overlay.draw)

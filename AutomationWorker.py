@@ -2279,19 +2279,17 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
 
     def __init__(
         self,
-        selected_accounts: List[str],
+        account_clan_options: Dict[str, str],
         account_settings_getter,
         apply_settings_fn,
-        return_to_main_clan: bool = False,
         parent=None,
     ):
         super().__init__(parent)
         self._stop_requested = False
         Autoclash._default_session.stop_requested = False
-        self.selected_accounts = list(selected_accounts)
+        self.account_clan_options = dict(account_clan_options)
         self._get_account_settings = account_settings_getter
         self._apply_settings = apply_settings_fn
-        self._return_to_main_clan = return_to_main_clan
 
     def stop(self):
         self._stop_requested = True
@@ -2340,17 +2338,11 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
                 bot_reporter.update_phase(phase, msg)
                 self.overlay_draw.emit([], f"Capital Raid — {phase}: {msg[:60]}")
 
-            _EXCLUDED_ACCOUNTS = {"lewis", "williamleeming"}
-
-            for account in self.selected_accounts:
+            for account, clan_option in self.account_clan_options.items():
                 if self._stop_requested:
                     break
 
                 bot_reporter.update_account(account)
-
-                if account in _EXCLUDED_ACCOUNTS:
-                    _status("Skip", f"Skipping excluded account '{account}'")
-                    continue
 
                 switched = None
                 for attempt in range(1, 4):
@@ -2423,8 +2415,23 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
                         )
                     break  # "done", "nav_failed", or "stopped"
 
-                if not self._stop_requested and self._return_to_main_clan:
+                if not self._stop_requested:
+                    _status("MainClan", f"Rejoining main clan for '{account}'…")
                     capitalraider.return_to_main_clan(
+                        stop_fn=lambda: self._stop_requested,
+                        status_fn=_status,
+                    )
+
+                if not self._stop_requested:
+                    _status("LootDump", f"Dumping loot into home capital for '{account}'…")
+                    capitalraider.dump_loot_into_home_capital(
+                        stop_fn=lambda: self._stop_requested,
+                        status_fn=_status,
+                    )
+
+                if not self._stop_requested and clan_option == "leave":
+                    _status("LeaveClan", f"Leaving clan for '{account}'…")
+                    capitalraider.leave_clan(
                         stop_fn=lambda: self._stop_requested,
                         status_fn=_status,
                     )

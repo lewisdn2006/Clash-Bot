@@ -95,6 +95,41 @@ PROFILE_TAB_COORD:  Tuple[int, int] = (67,   52)
 SOCIAL_TAB_COORD:   Tuple[int, int] = (1510,  91)
 EXIT_PROFILE_COORD: Tuple[int, int] = (67,  358)
 
+# Home clan district coordinates (used when donating loot after rejoining main clan).
+# Different from DISTRICTS which are used during enemy capital raids.
+HOME_DISTRICTS = [
+    ("Goblin Mines",       (1222, 1016)),
+    ("Skeleton Park",      ( 871, 1019)),
+    ("Golem Quarry",       ( 542,  965)),
+    ("Dragon Cliffs",      (1302,  770)),
+    ("Builder's Workshop", (1072,  849)),
+    ("Balloon Lagoon",     ( 739,  825)),
+    ("Wizard Valley",      ( 919,  674)),
+    ("Barbarian Camp",     (1135,  572)),
+    ("Capital Peak",       ( 912,  378)),
+]
+
+# Builder menu / gold spending templates
+TPL_BUILDER_ICON        = "capital_builder_icon.png"
+TPL_GOLD_SYMBOL         = "capital_gold_symbol.png"
+TPL_CONTRIBUTE_GOLD     = "clan_capital_contribute_gold.png"
+TPL_UPGRADE_WALLS       = "clan_capital_upgrade_walls.png"
+TPL_UPGRADE_BUILDING    = "clan_capital_upgrade_building.png"
+TPL_REBUILD_BUILDING    = "clan_capital_rebuild_building.png"
+TPL_LEAVE_CLAN          = "leave_clan.png"
+
+# Search region for capital_gold_symbol inside the builder menu
+GOLD_SEARCH_BOX: Tuple[int, int, int, int] = (950, 124, 1191, 472)
+
+# Bottom-left exit/back button used throughout the capital screens
+BOTTOM_LEFT_EXIT: Tuple[int, int] = (50, 1030)
+
+# "My Clan" tab coordinate (used in the leave-clan flow)
+MY_CLAN_TAB_COORD: Tuple[int, int] = (810, 100)
+
+# Confirm button coordinate for the leave-clan confirmation dialog
+LEAVE_CLAN_OK_COORD: Tuple[int, int] = (1100, 680)
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -593,6 +628,202 @@ def return_to_main_clan(
 ) -> bool:
     """Return to williamleeming's clan (main clan) after capital raids."""
     return _join_clan_of(TPL_WILLIAMLEEMING, "williamleeming", stop_fn, status_fn)
+
+
+def leave_clan(
+    stop_fn: Optional[Callable],
+    status_fn: Optional[Callable],
+) -> bool:
+    """
+    Leave the clan the current account is in.
+
+    Flow:
+      1. Open the profile panel (top-left tab)
+      2. Click the 'My Clan' tab at (810, 100)
+      3. Find and click leave_clan.png
+      4. Confirm by clicking OK at (1100, 680)
+
+    Returns True on success, False if stopped or a step fails.
+    """
+    _status(status_fn, "LeaveClan", "Opening profile panel…")
+    Autoclash.click_with_jitter(*PROFILE_TAB_COORD)
+    time.sleep(1.0)
+    if _stopped(stop_fn):
+        return False
+
+    _status(status_fn, "LeaveClan", "Clicking My Clan tab…")
+    Autoclash.click_with_jitter(*MY_CLAN_TAB_COORD)
+    time.sleep(1.0)
+    if _stopped(stop_fn):
+        return False
+
+    leave_coords = _find_template_retry(TPL_LEAVE_CLAN, attempts=5, delay=0.5)
+    if leave_coords is None:
+        _status(status_fn, "LeaveClan", "Could not find leave_clan button — aborting leave")
+        return False
+
+    _status(status_fn, "LeaveClan", "Clicking leave clan button…")
+    Autoclash.click_with_jitter(*leave_coords)
+    time.sleep(1.0)
+    if _stopped(stop_fn):
+        return False
+
+    _status(status_fn, "LeaveClan", "Confirming leave…")
+    Autoclash.click_with_jitter(*LEAVE_CLAN_OK_COORD)
+    time.sleep(2.0)
+
+    _status(status_fn, "LeaveClan", "Left clan successfully")
+    return True
+
+
+def _exit_to_capital_overview(stop_fn, status_fn, max_attempts=20):
+    """Click BOTTOM_LEFT_EXIT until capital_returnhome.png is visible."""
+    for attempt in range(1, max_attempts + 1):
+        if _stopped(stop_fn):
+            return False
+        rh = Autoclash.find_template("capital_returnhome.png")
+        if rh:
+            _log(f"capital_returnhome visible after {attempt} attempt(s)")
+            return True
+        _log(f"capital_returnhome not visible — clicking bottom-left (attempt {attempt})")
+        Autoclash.click_with_jitter(*BOTTOM_LEFT_EXIT)
+        time.sleep(1.0)
+    _log("_exit_to_capital_overview: timed out")
+    return False
+
+
+def dump_loot_into_home_capital(
+    stop_fn: Optional[Callable],
+    status_fn: Optional[Callable],
+) -> None:
+    """
+    After rejoining the main clan, navigate to the Clan Capital overview and
+    spend all accumulated Capital Gold across available home districts.
+    """
+    _status(status_fn, "LootDump", "Navigating to Clan Capital ship…")
+    if not navigate_to_capital(stop_fn, status_fn):
+        _status(status_fn, "LootDump", "Could not navigate to capital — aborting loot dump")
+        return
+
+    if _stopped(stop_fn):
+        return
+
+    _status(status_fn, "LootDump", "Exiting to capital overview…")
+    if not _exit_to_capital_overview(stop_fn, status_fn):
+        _status(status_fn, "LootDump", "Could not reach capital overview — aborting loot dump")
+        return
+
+    for district_name, district_coord in HOME_DISTRICTS:
+        if _stopped(stop_fn):
+            return
+
+        _status(status_fn, "LootDump", f"Selecting district: {district_name}…")
+        Autoclash.click_with_jitter(*district_coord)
+        time.sleep(5.0)
+
+        if _stopped(stop_fn):
+            return
+
+        # Locked/unavailable: capital_returnhome still visible after clicking district
+        rh = Autoclash.find_template("capital_returnhome.png")
+        if rh:
+            _status(status_fn, "LootDump", f"{district_name}: locked/unavailable — skipping")
+            continue
+
+        # Inside district — run gold-spending inner loop
+        _status(status_fn, "LootDump", f"{district_name}: entered — spending gold…")
+        while True:
+            if _stopped(stop_fn):
+                return
+
+            # a. Click builder icon to open builder menu
+            builder_coords = _find_template_retry(TPL_BUILDER_ICON, attempts=5, delay=0.5)
+            if builder_coords is None:
+                _status(status_fn, "LootDump", f"{district_name}: builder icon not found — moving to next district")
+                Autoclash.click_with_jitter(*BOTTOM_LEFT_EXIT)
+                time.sleep(1.0)
+                break
+            Autoclash.click_with_jitter(*builder_coords)
+            time.sleep(1.0)
+
+            if _stopped(stop_fn):
+                return
+
+            # b. Search for gold symbol in builder menu
+            gold_coords = None
+            for _ in range(3):
+                gold_coords = Autoclash.find_template(TPL_GOLD_SYMBOL, search_box=GOLD_SEARCH_BOX)
+                if gold_coords:
+                    break
+                time.sleep(0.5)
+
+            if gold_coords is None:
+                _status(status_fn, "LootDump", f"{district_name}: fully upgraded — exiting district")
+                Autoclash.click_with_jitter(*BOTTOM_LEFT_EXIT)
+                time.sleep(1.0)
+                break
+
+            _status(status_fn, "LootDump", f"{district_name}: gold symbol found — clicking")
+            Autoclash.click_with_jitter(*gold_coords)
+            time.sleep(1.0)
+
+            if _stopped(stop_fn):
+                return
+
+            # c. Find and click upgrade/rebuild confirmation button
+            upgrade_coords = None
+            for _ in range(3):
+                for tpl in (TPL_UPGRADE_WALLS, TPL_UPGRADE_BUILDING, TPL_REBUILD_BUILDING):
+                    upgrade_coords = Autoclash.find_template(tpl)
+                    if upgrade_coords:
+                        break
+                if upgrade_coords:
+                    break
+                time.sleep(0.5)
+
+            if upgrade_coords is None:
+                _status(status_fn, "LootDump", f"{district_name}: no upgrade button found — moving to next district")
+                break
+
+            Autoclash.click_with_jitter(*upgrade_coords)
+            time.sleep(1.0)
+
+            if _stopped(stop_fn):
+                return
+
+            # d. Find and click contribute gold button
+            contribute_coords = _find_template_retry(TPL_CONTRIBUTE_GOLD, attempts=3, delay=0.5)
+            if contribute_coords is None:
+                _status(status_fn, "LootDump", f"{district_name}: contribute button not found — moving to next district")
+                break
+
+            Autoclash.click_with_jitter(*contribute_coords)
+            time.sleep(5.0)
+
+            if _stopped(stop_fn):
+                return
+
+            # e. Check if contribution succeeded
+            still_visible = Autoclash.find_template(TPL_CONTRIBUTE_GOLD)
+            if still_visible:
+                # Gold exhausted — exit to home village and return
+                _status(status_fn, "LootDump", "Gold exhausted — returning to home village")
+                if _exit_to_capital_overview(stop_fn, status_fn):
+                    rh = Autoclash.find_template("capital_returnhome.png")
+                    if rh:
+                        Autoclash.click_with_jitter(*rh)
+                        time.sleep(1.5)
+                return
+
+            _status(status_fn, "LootDump", f"{district_name}: gold contributed — continuing")
+            # Loop back to a
+
+    # All 9 districts processed — return to home village
+    _status(status_fn, "LootDump", "All districts processed — returning to home village")
+    rh = Autoclash.find_template("capital_returnhome.png")
+    if rh:
+        Autoclash.click_with_jitter(*rh)
+        time.sleep(1.5)
 
 
 # ---------------------------------------------------------------------------
