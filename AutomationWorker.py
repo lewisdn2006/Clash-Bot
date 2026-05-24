@@ -2453,6 +2453,7 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
             bot_reporter.set_mode('capital')
             bot_reporter.update_phase("Starting", "Capital Raid starting...")
             bot_reporter.log("Capital Raid automation started")
+            home_space_listener.start()
             try:
                 import keyboard as _kb
                 _kb.add_hotkey("space", self.stop)
@@ -2608,6 +2609,7 @@ class ClanCapitalWorker(QThread, _RecoveryMixin, _ContextMixin):
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
+            home_space_listener.stop()
             if _keyboard_registered:
                 try:
                     import keyboard as _kb
