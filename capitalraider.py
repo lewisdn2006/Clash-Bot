@@ -796,11 +796,11 @@ def dump_loot_into_home_capital(
                 return
 
             # a. Click builder icon to open builder menu
-            builder_coords = _find_template_retry(TPL_BUILDER_ICON, attempts=5, delay=0.5)
+            builder_coords = _find_template_retry(TPL_BUILDER_ICON, attempts=10, delay=1.0)
             if builder_coords is None:
                 _status(status_fn, "LootDump", f"{district_name}: builder icon not found — moving to next district")
                 Autoclash.click_with_jitter(*BOTTOM_LEFT_EXIT)
-                time.sleep(1.0)
+                time.sleep(5.0)
                 break
             Autoclash.click_with_jitter(*builder_coords)
             time.sleep(1.0)
@@ -822,7 +822,7 @@ def dump_loot_into_home_capital(
             if gold_coords is None:
                 _status(status_fn, "LootDump", f"{district_name}: fully upgraded — exiting district")
                 Autoclash.click_with_jitter(*BOTTOM_LEFT_EXIT)
-                time.sleep(1.0)
+                time.sleep(5.0)
                 break
 
             _status(status_fn, "LootDump", f"{district_name}: gold symbol found — clicking")
