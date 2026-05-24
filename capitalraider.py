@@ -707,6 +707,36 @@ def _exit_to_capital_overview(stop_fn, status_fn, max_attempts=20):
     return False
 
 
+def _dismiss_capital_lobby_overlay(stop_fn, status_fn) -> bool:
+    """
+    If a 'Go' or 'Next Raid' lobby overlay is visible on the capital overview,
+    click it and back out to a clean overlay-free overview via
+    _exit_to_capital_overview.
+
+    Returns True when the overview is clean (either the overlay was dismissed
+    successfully, or no overlay was present at all).
+    Returns False only if the overlay was found but _exit_to_capital_overview
+    subsequently timed out.
+    """
+    for _tpl, _label in ((TPL_CAPITAL_GO, "Go"), (TPL_CAPITAL_NEXTRAID, "Next Raid")):
+        if _stopped(stop_fn):
+            return False
+        _coords = Autoclash.find_template(_tpl)
+        if _coords:
+            _status(status_fn, "LootDump", f"{_label} overlay found — clicking to dismiss…")
+            Autoclash.click_with_jitter(*_coords)
+            time.sleep(2.0)
+            _status(status_fn, "LootDump", "Backing out to clean capital overview…")
+            if not _exit_to_capital_overview(stop_fn, status_fn):
+                _status(status_fn, "LootDump",
+                        f"Could not return to overview after clicking {_label} — cannot continue")
+                return False
+            _status(status_fn, "LootDump", "Overlay dismissed — capital overview is clean")
+            return True
+    # No overlay found — overview already clean
+    return True
+
+
 def dump_loot_into_home_capital(
     stop_fn: Optional[Callable],
     status_fn: Optional[Callable],
@@ -728,30 +758,21 @@ def dump_loot_into_home_capital(
         _status(status_fn, "LootDump", "Could not reach capital overview — aborting loot dump")
         return
 
-    # Dismiss any active "Go" or "Next Raid" lobby overlay.
-    # These buttons are visible alongside capital_returnhome.png but block district entry.
-    # Clicking either navigates deeper into the capital; then we back out with
-    # _exit_to_capital_overview to reach a clean overlay-free overview.
-    _overlay_dismissed = False
-    for _tpl, _label in ((TPL_CAPITAL_GO, "Go"), (TPL_CAPITAL_NEXTRAID, "Next Raid")):
-        if _stopped(stop_fn):
-            return
-        _coords = Autoclash.find_template(_tpl)
-        if _coords:
-            _status(status_fn, "LootDump", f"{_label} overlay found — clicking to dismiss…")
-            Autoclash.click_with_jitter(*_coords)
-            time.sleep(2.0)
-            _status(status_fn, "LootDump", "Backing out to clean capital overview…")
-            if not _exit_to_capital_overview(stop_fn, status_fn):
-                _status(status_fn, "LootDump", f"Could not return to overview after clicking {_label} — aborting loot dump")
-                return
-            _overlay_dismissed = True
-            break
-
-    if _overlay_dismissed:
-        _status(status_fn, "LootDump", "Overlay dismissed — capital overview is clean")
+    # Dismiss any active "Go" or "Next Raid" lobby overlay before entering the loop.
+    if not _dismiss_capital_lobby_overlay(stop_fn, status_fn):
+        _status(status_fn, "LootDump", "Could not dismiss initial overlay — aborting loot dump")
+        return
 
     for district_name, district_coord in HOME_DISTRICTS:
+        if _stopped(stop_fn):
+            return
+
+        # Re-check for Go/Next Raid overlay before each district — it can
+        # reappear after exiting a completed district back to the overview.
+        if not _dismiss_capital_lobby_overlay(stop_fn, status_fn):
+            _status(status_fn, "LootDump", "Could not dismiss overlay mid-loop — aborting loot dump")
+            return
+
         if _stopped(stop_fn):
             return
 
