@@ -713,6 +713,29 @@ def dump_loot_into_home_capital(
         _status(status_fn, "LootDump", "Could not reach capital overview — aborting loot dump")
         return
 
+    # Dismiss any active "Go" or "Next Raid" lobby overlay.
+    # These buttons are visible alongside capital_returnhome.png but block district entry.
+    # Clicking either navigates deeper into the capital; then we back out with
+    # _exit_to_capital_overview to reach a clean overlay-free overview.
+    _overlay_dismissed = False
+    for _tpl, _label in ((TPL_CAPITAL_GO, "Go"), (TPL_CAPITAL_NEXTRAID, "Next Raid")):
+        if _stopped(stop_fn):
+            return
+        _coords = Autoclash.find_template(_tpl)
+        if _coords:
+            _status(status_fn, "LootDump", f"{_label} overlay found — clicking to dismiss…")
+            Autoclash.click_with_jitter(*_coords)
+            time.sleep(2.0)
+            _status(status_fn, "LootDump", "Backing out to clean capital overview…")
+            if not _exit_to_capital_overview(stop_fn, status_fn):
+                _status(status_fn, "LootDump", f"Could not return to overview after clicking {_label} — aborting loot dump")
+                return
+            _overlay_dismissed = True
+            break
+
+    if _overlay_dismissed:
+        _status(status_fn, "LootDump", "Overlay dismissed — capital overview is clean")
+
     for district_name, district_coord in HOME_DISTRICTS:
         if _stopped(stop_fn):
             return
