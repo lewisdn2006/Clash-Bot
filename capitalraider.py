@@ -112,6 +112,7 @@ HOME_DISTRICTS = [
 # Builder menu / gold spending templates
 TPL_BUILDER_ICON        = "capital_builder_icon.png"
 TPL_GOLD_SYMBOL         = "capital_gold_symbol.png"
+TPL_GOLD_SYMBOL_2       = "capital_gold_symbol_2.png"
 TPL_CONTRIBUTE_GOLD     = "clan_capital_contribute_gold.png"
 TPL_UPGRADE_WALLS       = "clan_capital_upgrade_walls.png"
 TPL_UPGRADE_BUILDING    = "clan_capital_upgrade_building.png"
@@ -786,10 +787,13 @@ def dump_loot_into_home_capital(
             if _stopped(stop_fn):
                 return
 
-            # b. Search for gold symbol in builder menu
+            # b. Search for gold symbol in builder menu (try both variants)
             gold_coords = None
             for _ in range(3):
                 gold_coords = Autoclash.find_template(TPL_GOLD_SYMBOL, search_box=GOLD_SEARCH_BOX)
+                if gold_coords:
+                    break
+                gold_coords = Autoclash.find_template(TPL_GOLD_SYMBOL_2, search_box=GOLD_SEARCH_BOX)
                 if gold_coords:
                     break
                 time.sleep(0.5)
