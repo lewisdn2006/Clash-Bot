@@ -809,6 +809,25 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
             self.overlay_draw.emit([], "Home Village — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
+            _ctrl_d_registered = False
+            try:
+                import keyboard as _kb_disconnect
+                def _on_disconnect():
+                    log("Ctrl+D pressed — disconnecting Remote Desktop...")
+                    try:
+                        import subprocess
+                        subprocess.Popen(
+                            [r'C:\Users\fghgh\Desktop\disconnect.bat'],
+                            shell=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                        )
+                    except Exception as _e:
+                        log(f"WARNING: Failed to launch disconnect.bat: {_e}")
+                _kb_disconnect.add_hotkey("ctrl+d", _on_disconnect)
+                _ctrl_d_registered = True
+                log("HomeVillageWorker: Ctrl+D disconnect enabled")
+            except Exception:
+                log("HomeVillageWorker: keyboard module unavailable; Ctrl+D disabled")
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
             _br.register_command_callback('pause',      _cmd_pause)
@@ -1020,6 +1039,12 @@ class HomeVillageWorker(QThread, _RecoveryMixin, _ContextMixin):
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
+            if _ctrl_d_registered:
+                try:
+                    import keyboard as _kb_disconnect
+                    _kb_disconnect.remove_hotkey("ctrl+d")
+                except Exception:
+                    pass
             bot_reporter.stop()
             self.finished.emit()
 
@@ -1135,6 +1160,25 @@ class FillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             self.overlay_draw.emit([], "Fill Accounts — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
+            _ctrl_d_registered = False
+            try:
+                import keyboard as _kb_disconnect
+                def _on_disconnect():
+                    log("Ctrl+D pressed — disconnecting Remote Desktop...")
+                    try:
+                        import subprocess
+                        subprocess.Popen(
+                            [r'C:\Users\fghgh\Desktop\disconnect.bat'],
+                            shell=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                        )
+                    except Exception as _e:
+                        log(f"WARNING: Failed to launch disconnect.bat: {_e}")
+                _kb_disconnect.add_hotkey("ctrl+d", _on_disconnect)
+                _ctrl_d_registered = True
+                log("FillAccountsWorker: Ctrl+D disconnect enabled")
+            except Exception:
+                log("FillAccountsWorker: keyboard module unavailable; Ctrl+D disabled")
             import bot_reporter as _br
             _br.set_mode('home')
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
@@ -1215,6 +1259,12 @@ class FillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
+            if _ctrl_d_registered:
+                try:
+                    import keyboard as _kb_disconnect
+                    _kb_disconnect.remove_hotkey("ctrl+d")
+                except Exception:
+                    pass
             self.finished.emit()
 
 
@@ -1392,6 +1442,25 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             self.overlay_draw.emit([], "Cycle Accounts — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
+            _ctrl_d_registered = False
+            try:
+                import keyboard as _kb_disconnect
+                def _on_disconnect():
+                    log("Ctrl+D pressed — disconnecting Remote Desktop...")
+                    try:
+                        import subprocess
+                        subprocess.Popen(
+                            [r'C:\Users\fghgh\Desktop\disconnect.bat'],
+                            shell=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                        )
+                    except Exception as _e:
+                        log(f"WARNING: Failed to launch disconnect.bat: {_e}")
+                _kb_disconnect.add_hotkey("ctrl+d", _on_disconnect)
+                _ctrl_d_registered = True
+                log("CycleAccountsWorker: Ctrl+D disconnect enabled")
+            except Exception:
+                log("CycleAccountsWorker: keyboard module unavailable; Ctrl+D disabled")
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
             _br.register_command_callback('pause',      _cmd_pause)
@@ -1495,6 +1564,12 @@ class CycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
+            if _ctrl_d_registered:
+                try:
+                    import keyboard as _kb_disconnect
+                    _kb_disconnect.remove_hotkey("ctrl+d")
+                except Exception:
+                    pass
             bot_reporter.stop()
             self.finished.emit()
 
@@ -1532,6 +1607,25 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
             self.overlay_draw.emit([], "Builder Base — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             Autoclash_BB.space_listener.start()
+            _ctrl_d_registered = False
+            try:
+                import keyboard as _kb_disconnect
+                def _on_disconnect():
+                    log("Ctrl+D pressed — disconnecting Remote Desktop...")
+                    try:
+                        import subprocess
+                        subprocess.Popen(
+                            [r'C:\Users\fghgh\Desktop\disconnect.bat'],
+                            shell=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                        )
+                    except Exception as _e:
+                        log(f"WARNING: Failed to launch disconnect.bat: {_e}")
+                _kb_disconnect.add_hotkey("ctrl+d", _on_disconnect)
+                _ctrl_d_registered = True
+                log("BuilderBaseWorker: Ctrl+D disconnect enabled")
+            except Exception:
+                log("BuilderBaseWorker: keyboard module unavailable; Ctrl+D disabled")
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
             _br.register_command_callback('pause',      _cmd_pause)
@@ -1609,6 +1703,12 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
+            if _ctrl_d_registered:
+                try:
+                    import keyboard as _kb_disconnect
+                    _kb_disconnect.remove_hotkey("ctrl+d")
+                except Exception:
+                    pass
             bot_reporter.stop()
             Autoclash_BB._default_session.shutdown_requested = False
             self.finished.emit()
@@ -1661,6 +1761,25 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             _set_overlay_callback(self.overlay_draw.emit)
             Autoclash_BB._default_session.shutdown_requested = False
             Autoclash_BB.space_listener.start()
+            _ctrl_d_registered = False
+            try:
+                import keyboard as _kb_disconnect
+                def _on_disconnect():
+                    log("Ctrl+D pressed — disconnecting Remote Desktop...")
+                    try:
+                        import subprocess
+                        subprocess.Popen(
+                            [r'C:\Users\fghgh\Desktop\disconnect.bat'],
+                            shell=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                        )
+                    except Exception as _e:
+                        log(f"WARNING: Failed to launch disconnect.bat: {_e}")
+                _kb_disconnect.add_hotkey("ctrl+d", _on_disconnect)
+                _ctrl_d_registered = True
+                log("BBFillAccountsWorker: Ctrl+D disconnect enabled")
+            except Exception:
+                log("BBFillAccountsWorker: keyboard module unavailable; Ctrl+D disabled")
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
             _br.register_command_callback('pause',      _cmd_pause)
@@ -1780,6 +1899,12 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
+            if _ctrl_d_registered:
+                try:
+                    import keyboard as _kb_disconnect
+                    _kb_disconnect.remove_hotkey("ctrl+d")
+                except Exception:
+                    pass
             bot_reporter.stop()
             Autoclash_BB._default_session.shutdown_requested = False
             Autoclash_BB.CONFIG["TEMPLATE_THRESH_DEFAULT"] = original_thresh
@@ -2096,6 +2221,25 @@ class ClanGamesMasterWorker(QThread, _RecoveryMixin):
             bot_reporter.log("Clan Games Master Bot started")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
+            _ctrl_d_registered = False
+            try:
+                import keyboard as _kb_disconnect
+                def _on_disconnect():
+                    log("Ctrl+D pressed — disconnecting Remote Desktop...")
+                    try:
+                        import subprocess
+                        subprocess.Popen(
+                            [r'C:\Users\fghgh\Desktop\disconnect.bat'],
+                            shell=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                        )
+                    except Exception as _e:
+                        log(f"WARNING: Failed to launch disconnect.bat: {_e}")
+                _kb_disconnect.add_hotkey("ctrl+d", _on_disconnect)
+                _ctrl_d_registered = True
+                log("ClanGamesMasterWorker: Ctrl+D disconnect enabled")
+            except Exception:
+                log("ClanGamesMasterWorker: keyboard module unavailable; Ctrl+D disabled")
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
             _br.register_command_callback('pause',      _cmd_pause)
@@ -2150,6 +2294,12 @@ class ClanGamesMasterWorker(QThread, _RecoveryMixin):
             if self._stopped():
                 self.status_update.emit("Stopped", "Clan Games Master Bot stopped by user")
                 bot_reporter.update_phase("Stopped", "Clan Games Master Bot stopped by user")
+            if _ctrl_d_registered:
+                try:
+                    import keyboard as _kb_disconnect
+                    _kb_disconnect.remove_hotkey("ctrl+d")
+                except Exception:
+                    pass
             bot_reporter.stop()
             self.finished.emit()
 
@@ -2700,6 +2850,25 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             self.overlay_draw.emit([], "Upgrade Accounts — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             home_space_listener.start()
+            _ctrl_d_registered = False
+            try:
+                import keyboard as _kb_disconnect
+                def _on_disconnect():
+                    log("Ctrl+D pressed — disconnecting Remote Desktop...")
+                    try:
+                        import subprocess
+                        subprocess.Popen(
+                            [r'C:\Users\fghgh\Desktop\disconnect.bat'],
+                            shell=True,
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                        )
+                    except Exception as _e:
+                        log(f"WARNING: Failed to launch disconnect.bat: {_e}")
+                _kb_disconnect.add_hotkey("ctrl+d", _on_disconnect)
+                _ctrl_d_registered = True
+                log("UpgradeAccountsWorker: Ctrl+D disconnect enabled")
+            except Exception:
+                log("UpgradeAccountsWorker: keyboard module unavailable; Ctrl+D disabled")
             import bot_reporter as _br
             _br.set_mode('home')
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
@@ -2851,6 +3020,12 @@ class UpgradeAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
+            if _ctrl_d_registered:
+                try:
+                    import keyboard as _kb_disconnect
+                    _kb_disconnect.remove_hotkey("ctrl+d")
+                except Exception:
+                    pass
             bot_reporter.stop()
             self.finished.emit()
 
