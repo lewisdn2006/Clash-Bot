@@ -4033,6 +4033,10 @@ class HomeBattleSession:
                         if i < 3:  # no wait after the last click
                             _pauseable_sleep(self, 1)
 
+                    # Wait 2 seconds for the card-collect screen to settle before clicking Continue
+                    log("Waiting 2 seconds before clicking Continue...")
+                    _pauseable_sleep(self, 2)
+
                     # Click the Continue button on the card-collect screen.
                     # Coordinate measured from card_collect.PNG (1920x1080): centre of the green
                     # "Continue" button = (997, 940). NOTE: this is deliberately different from the
