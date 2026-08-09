@@ -139,6 +139,10 @@ def scroll_down_5_times(amount: int = WHEEL_DELTA * 3):
         time.sleep(0.2)
     log("Scrolled down 5 times")
 
+# ═══ TEMP CARD EVENT — REMOVE AFTER EVENT ENDS ═══
+CARD_EVENT_ACTIVE = True   # set False (or delete this block) when the card event ends
+# ═══ END TEMP CARD EVENT ═══
+
 # ================================
 # CONFIGURATION
 # ================================
@@ -159,6 +163,9 @@ CONFIG = {
     "event_troop_button": "lavaloon.png",
     "return_button": "return_button.png",
     "claim_reward_button": "claim_reward_button.png",
+    # ═══ TEMP CARD EVENT — REMOVE AFTER EVENT ENDS ═══
+    "claim_card_button": "claim_card.PNG",
+    # ═══ END TEMP CARD EVENT ═══
     "try_again_button": "try_again_button.png",
     "reload_game_button": "reload_game.png",
     "layout_editor_text": "layout_editor_text.png",
@@ -257,6 +264,13 @@ CONFIG = {
     # Event and Siege Machine features
     "event_active": False,  # Set to True to place event dragons
     "event_troop_count": 50,
+    # Multiple event troops. When this list is non-empty it OVERRIDES the single
+    # event_troop_button/event_troop_count settings for every account while event_active is on.
+    # Leave empty ([]) to fall back to the single-troop behaviour.
+    "event_troops": [
+        {"template": "elephant_rider.PNG", "count": 20},   # TODO: set real amount
+        {"template": "super_valk.PNG",     "count": 20},   # TODO: set real amount
+    ],
     "siege_machine_active": False,  # Set to True to place siege machine
     
     # Time to wait (in seconds) after placing all heroes before activating their abilities
@@ -3783,48 +3797,85 @@ class HomeBattleSession:
         all_battle_points = CONFIG["ten_battle_points"]
 
         if event_active:
-            log("Event is active! Placing event dragons...")
-
-            # Search for event troop button
-            event_troop_button = CONFIG.get("event_troop_button", "lavaloon.png")
-            log(f"Searching for {event_troop_button} to activate...")
-
-            event_troop_found = False
-            for attempt in range(1, CONFIG["max_search_attempts"] + 1):
-                event_troop_coords = find_template(event_troop_button, confidence=CONFIG.get("confidence_threshold", 0.75))
-
-                if event_troop_coords:
-                    log(f"Found event troop button at ({event_troop_coords[0]}, {event_troop_coords[1]}), clicking...")
-                    click_smooth(*event_troop_coords)
-                    event_troop_found = True
-                    break
-
-                if attempt < CONFIG["max_search_attempts"]:
-                    time.sleep(CONFIG["wait_between_attempts"])
-
-            if not event_troop_found:
-                log("WARNING: Event troop button not found, skipping event placement...")
-            else:
-                # Place event troops across battle points
-                event_troop_count = CONFIG.get("event_troop_count", 50)
-                fast_event = event_troop_count > 16
-                if fast_event:
-                    log(f"Event troop count > 16 ({event_troop_count}) - using fast deployment clicks")
-                log(f"Placing {event_troop_count} event troops across battle points...")
-
-                for i in range(event_troop_count):
-                    coord_index = i % len(all_battle_points)
-                    x, y = all_battle_points[coord_index]
-                    log(f"Placing event troop at battle point {i+1}: ({x}, {y})")
+            event_troops = CONFIG.get("event_troops")
+            if event_troops:
+                log(f"Event active — placing {len(event_troops)} event troop type(s)...")
+                for troop in event_troops:
+                    tmpl = troop.get("template")
+                    cnt = int(troop.get("count", 0))
+                    if not tmpl or cnt <= 0:
+                        continue
+                    log(f"Searching for event troop '{tmpl}' to activate...")
+                    found = False
+                    for attempt in range(1, CONFIG["max_search_attempts"] + 1):
+                        coords = find_template(tmpl, confidence=CONFIG.get("confidence_threshold", 0.75))
+                        if coords:
+                            log(f"Found '{tmpl}' at ({coords[0]}, {coords[1]}), clicking...")
+                            click_smooth(*coords)
+                            found = True
+                            break
+                        if attempt < CONFIG["max_search_attempts"]:
+                            time.sleep(CONFIG["wait_between_attempts"])
+                    if not found:
+                        log(f"WARNING: event troop '{tmpl}' not found, skipping it...")
+                        continue
+                    fast_event = cnt > 16
                     if fast_event:
-                        click_deploy(x, y)
-                    else:
-                        click_with_jitter(x, y)
-                        random_delay()
-                    if (i + 1) % 10 == 0 and i + 1 < event_troop_count:
-                        log(f"Completed {i + 1} event troops, looping back to position 1...")
+                        log(f"Event troop count > 16 ({cnt}) - using fast deployment clicks")
+                    log(f"Placing {cnt} of '{tmpl}' across battle points...")
+                    for i in range(cnt):
+                        x, y = all_battle_points[i % len(all_battle_points)]
+                        if fast_event:
+                            click_deploy(x, y)
+                        else:
+                            click_with_jitter(x, y)
+                            random_delay()
+                    log(f"Finished placing '{tmpl}'.")
+                log("All event troops placed!")
+            else:
+                # ── existing single-event-troop logic, UNCHANGED ──
+                log("Event is active! Placing event dragons...")
 
-                log("Event troop placement complete!")
+                # Search for event troop button
+                event_troop_button = CONFIG.get("event_troop_button", "lavaloon.png")
+                log(f"Searching for {event_troop_button} to activate...")
+
+                event_troop_found = False
+                for attempt in range(1, CONFIG["max_search_attempts"] + 1):
+                    event_troop_coords = find_template(event_troop_button, confidence=CONFIG.get("confidence_threshold", 0.75))
+
+                    if event_troop_coords:
+                        log(f"Found event troop button at ({event_troop_coords[0]}, {event_troop_coords[1]}), clicking...")
+                        click_smooth(*event_troop_coords)
+                        event_troop_found = True
+                        break
+
+                    if attempt < CONFIG["max_search_attempts"]:
+                        time.sleep(CONFIG["wait_between_attempts"])
+
+                if not event_troop_found:
+                    log("WARNING: Event troop button not found, skipping event placement...")
+                else:
+                    # Place event troops across battle points
+                    event_troop_count = CONFIG.get("event_troop_count", 50)
+                    fast_event = event_troop_count > 16
+                    if fast_event:
+                        log(f"Event troop count > 16 ({event_troop_count}) - using fast deployment clicks")
+                    log(f"Placing {event_troop_count} event troops across battle points...")
+
+                    for i in range(event_troop_count):
+                        coord_index = i % len(all_battle_points)
+                        x, y = all_battle_points[coord_index]
+                        log(f"Placing event troop at battle point {i+1}: ({x}, {y})")
+                        if fast_event:
+                            click_deploy(x, y)
+                        else:
+                            click_with_jitter(x, y)
+                            random_delay()
+                        if (i + 1) % 10 == 0 and i + 1 < event_troop_count:
+                            log(f"Completed {i + 1} event troops, looping back to position 1...")
+
+                    log("Event troop placement complete!")
         else:
             log(f"Event NOT active for this battle - skipping event dragons (event_active_for_battle={CONFIG.get('event_active_for_battle', 'NOT SET')})")
 
@@ -3834,7 +3885,8 @@ class HomeBattleSession:
         # Calculate hero coordinates based on event and siege status
         base_hero_coords = [511, 622, 733, 844]
 
-        # Determine whether the event troop occupies a separate slot from the main troop
+        # Determine how many army-bar slots the event troops occupy.
+        # Each event troop whose icon differs from the main troop = one extra leading slot.
         _troop_type = CONFIG.get("troop_type", "edrag")
         if _troop_type == "drag":
             _main_tpl = CONFIG["drag_button"]
@@ -3844,27 +3896,30 @@ class HomeBattleSession:
             _main_tpl = CONFIG["barb_button"]
         else:
             _main_tpl = CONFIG["edrag_button"]
-        _event_tpl = CONFIG.get("event_troop_button", "")
-        event_adds_slot = event_active and (_event_tpl != _main_tpl)
 
-        # Apply coordinate shifts
-        hero_x_shift = 0
-        if event_adds_slot:
-            hero_x_shift += 111  # Shift right only when event adds a distinct extra slot
+        num_event_slots = 0
+        if event_active:
+            _event_troops = CONFIG.get("event_troops")
+            if _event_troops:
+                num_event_slots = sum(
+                    1 for t in _event_troops
+                    if t.get("template") and t.get("template") != _main_tpl and int(t.get("count", 0)) > 0
+                )
+            else:
+                _event_tpl = CONFIG.get("event_troop_button", "")
+                num_event_slots = 1 if (_event_tpl and _event_tpl != _main_tpl) else 0
 
+        # Each event slot shifts heroes right by one army-bar slot (111px); siege adds one more.
+        hero_x_shift = 111 * num_event_slots
         if siege_machine_active:
-            hero_x_shift += 111  # Shift right another 111 if siege is active
+            hero_x_shift += 111
 
-        # Calculate the shifted hero coordinates
         hero_coords = [x + hero_x_shift for x in base_hero_coords]
 
-        # Determine siege placement coordinate (original hero position before shifts)
+        # Siege sits in the first hero slot position before the siege shift is applied.
         siege_placement_x = None
         if siege_machine_active:
-            if event_adds_slot:
-                siege_placement_x = 622  # Original first hero position after event shift
-            else:
-                siege_placement_x = 511  # Original first hero position without event shift
+            siege_placement_x = 511 + 111 * num_event_slots
             log(f"Siege machine will be placed at x={siege_placement_x}")
 
         num_heroes = CONFIG["num_heroes"]
@@ -3948,6 +4003,53 @@ class HomeBattleSession:
 
             # Check for claim reward button
             claim_reward_coords = find_template(CONFIG["claim_reward_button"], screenshot=screenshot)
+
+            # ═══ TEMP CARD EVENT — REMOVE AFTER EVENT ENDS ═══
+            if CARD_EVENT_ACTIVE:
+                claim_card_coords = find_template(CONFIG["claim_card_button"], screenshot=screenshot)
+                if claim_card_coords:
+                    log(f"Card found! Claim card button at ({claim_card_coords[0]}, {claim_card_coords[1]})")
+
+                    # Capture loot before claiming, same as the normal return/claim branches
+                    log("Waiting 2.5s to capture loot before claiming card...")
+                    _pauseable_sleep(self, 2.5)
+                    try:
+                        snapshot = self.loot_tracker.extract_and_record()
+                        log(f"✓ Loot captured successfully: {snapshot}")
+                    except Exception as e:
+                        log(f"✗ WARNING: Failed to record loot automatically: {e}")
+                        import traceback
+                        traceback.print_exc()
+
+                    # Click the claim_card button
+                    ccx, ccy = add_jitter(*claim_card_coords)
+                    log(f"Clicking claim card button at ({ccx}, {ccy})")
+                    pyautogui.click(ccx, ccy)
+
+                    # Wait 5 seconds for the reveal to load
+                    log("Waiting 5 seconds after claiming card...")
+                    _pauseable_sleep(self, 5)
+
+                    # Click centre of the screen 3 times, 1 second apart
+                    screen_w, screen_h = pyautogui.size()
+                    center_x, center_y = screen_w // 2, screen_h // 2
+                    for i in range(1, 4):
+                        log(f"Card centre click {i}/3 at ({center_x}, {center_y})")
+                        pyautogui.click(center_x, center_y)
+                        if i < 3:  # no wait after the last click
+                            _pauseable_sleep(self, 1)
+
+                    # Click the Continue button on the card-collect screen.
+                    # Coordinate measured from card_collect.PNG (1920x1080): centre of the green
+                    # "Continue" button = (997, 940). NOTE: this is deliberately different from the
+                    # treasure/claim_reward final click at (955, 902).
+                    log("Clicking Continue button at (997, 940)")
+                    click_with_jitter(997, 940)
+                    random_delay()
+
+                    self.dismiss_star_bonus_popup_after_return()
+                    return True
+            # ═══ END TEMP CARD EVENT ═══
 
             if return_coords:
                 log(f"Battle ended! Return button found at ({return_coords[0]}, {return_coords[1]})")
