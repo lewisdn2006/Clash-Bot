@@ -360,6 +360,7 @@ HOME_SETTING_KEYS = (
     "auto_upgrade_walls",
     "auto_upgrade_storages",
     "event_active",
+    "event_troops",
     "do_ranked",
     "siege_machine_active",
     "clan_games_enabled",
@@ -871,15 +872,26 @@ class AccountConfigPage(QWidget):
         self.event_active_cb = QCheckBox("Event Active")
         form.addWidget(self.event_active_cb, r, 0, 1, 2); r += 1
 
-        form.addWidget(QLabel("Event Troop:"), r, 0)
-        self.event_troop_combo = QComboBox()
-        self.event_troop_combo.addItems(_EVENT_TROOP_OPTIONS)
-        form.addWidget(self.event_troop_combo, r, 1); r += 1
+        # ── Event troops: multi-select list + dynamic per-troop count boxes ──
+        form.addWidget(QLabel("Event Troops (tick all that apply):"), r, 0, 1, 2); r += 1
+        self.event_troop_list = QListWidget()
+        self.event_troop_list.setFixedHeight(150)
+        for _tmpl in _EVENT_TROOP_OPTIONS:
+            _item = QListWidgetItem(_pretty_troop_name(_tmpl))
+            _item.setData(Qt.ItemDataRole.UserRole, _tmpl)
+            _item.setFlags(_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            _item.setCheckState(Qt.CheckState.Unchecked)
+            self.event_troop_list.addItem(_item)
+        self.event_troop_list.itemChanged.connect(self._rebuild_event_count_boxes)
+        form.addWidget(self.event_troop_list, r, 0, 1, 2); r += 1
 
-        form.addWidget(QLabel("Event Troop Count:"), r, 0)
-        self.event_count_combo = QComboBox()
-        self.event_count_combo.addItems([str(i) for i in range(1, 61)])
-        form.addWidget(self.event_count_combo, r, 1); r += 1
+        form.addWidget(QLabel("Troop counts:"), r, 0, 1, 2); r += 1
+        self._event_counts = {}          # template -> last known count (persists across rebuilds)
+        self._event_count_spins = {}     # template -> live QSpinBox
+        self.event_counts_container = QWidget()
+        self.event_counts_layout = QVBoxLayout(self.event_counts_container)
+        self.event_counts_layout.setContentsMargins(0, 0, 0, 0)
+        form.addWidget(self.event_counts_container, r, 0, 1, 2); r += 1
 
         self.do_ranked_cb = QCheckBox("Do Ranked")
         form.addWidget(self.do_ranked_cb, r, 0, 1, 2); r += 1
@@ -945,6 +957,57 @@ class AccountConfigPage(QWidget):
         _page_lbl.raise_()
 
     # --- helpers to get / set values ---
+    def _rebuild_event_count_boxes(self, *_):
+        """Show one count box per ticked troop, with the troop's name as a title above it."""
+        # Remember whatever is currently typed before wiping the boxes
+        for _tmpl, _spin in self._event_count_spins.items():
+            self._event_counts[_tmpl] = _spin.value()
+
+        # Clear existing boxes
+        while self.event_counts_layout.count():
+            _child = self.event_counts_layout.takeAt(0)
+            _w = _child.widget()
+            if _w is not None:
+                _w.deleteLater()
+        self._event_count_spins = {}
+
+        # Rebuild in list order, one titled box per checked troop
+        for i in range(self.event_troop_list.count()):
+            item = self.event_troop_list.item(i)
+            if item.checkState() != Qt.CheckState.Checked:
+                continue
+            tmpl = item.data(Qt.ItemDataRole.UserRole)
+
+            box = QWidget()
+            box_l = QVBoxLayout(box)
+            box_l.setContentsMargins(0, 4, 0, 4)
+            box_l.setSpacing(2)
+
+            title = QLabel(_pretty_troop_name(tmpl))
+            title.setStyleSheet("font-weight: bold;")
+
+            spin = QSpinBox()
+            spin.setRange(1, 60)
+            spin.setValue(int(self._event_counts.get(tmpl, 50)))
+            spin.setFixedWidth(120)
+
+            box_l.addWidget(title)
+            box_l.addWidget(spin)
+            self.event_counts_layout.addWidget(box)
+            self._event_count_spins[tmpl] = spin
+
+    def _collect_event_troops(self) -> list:
+        troops = []
+        for i in range(self.event_troop_list.count()):
+            item = self.event_troop_list.item(i)
+            if item.checkState() != Qt.CheckState.Checked:
+                continue
+            tmpl = item.data(Qt.ItemDataRole.UserRole)
+            spin = self._event_count_spins.get(tmpl)
+            count = int(spin.value()) if spin is not None else int(self._event_counts.get(tmpl, 50))
+            troops.append({"template": tmpl, "count": count})
+        return troops
+
     def populate(self, settings: dict):
         _set_combo(self.loot_combo, f"{int(settings.get('min_loot_amount', 0)):,}")
         _set_combo(self.battle_points_combo, str(int(settings.get("num_battle_points", 10))))
@@ -954,8 +1017,21 @@ class AccountConfigPage(QWidget):
         self.auto_upgrade_cb.setChecked(bool(settings.get("auto_upgrade_walls", True)))
         self.auto_upgrade_storages_cb.setChecked(bool(settings.get("auto_upgrade_storages", True)))
         self.event_active_cb.setChecked(bool(settings.get("event_active", False)))
-        _set_combo(self.event_troop_combo, str(settings.get("event_troop_button", _EVENT_TROOP_OPTIONS[0])))
-        _set_combo(self.event_count_combo, str(int(settings.get("event_troop_count", 50))))
+        # Event troops (multi-select). Falls back to the legacy single-troop keys if present.
+        saved = settings.get("event_troops", None)
+        if saved is None:
+            legacy_tmpl = settings.get("event_troop_button")
+            legacy_cnt = int(settings.get("event_troop_count", 50))
+            saved = [{"template": legacy_tmpl, "count": legacy_cnt}] if legacy_tmpl else []
+        saved_map = {t.get("template"): int(t.get("count", 50)) for t in saved if t.get("template")}
+        self._event_counts = dict(saved_map)
+        self.event_troop_list.blockSignals(True)
+        for i in range(self.event_troop_list.count()):
+            item = self.event_troop_list.item(i)
+            tmpl = item.data(Qt.ItemDataRole.UserRole)
+            item.setCheckState(Qt.CheckState.Checked if tmpl in saved_map else Qt.CheckState.Unchecked)
+        self.event_troop_list.blockSignals(False)
+        self._rebuild_event_count_boxes()
         self.do_ranked_cb.setChecked(bool(settings.get("do_ranked", True)))
         self.siege_cb.setChecked(bool(settings.get("siege_machine_active", False)))
         self.clan_games_cb.setChecked(bool(settings.get("clan_games_enabled", False)))
@@ -977,8 +1053,7 @@ class AccountConfigPage(QWidget):
             "auto_upgrade_walls": self.auto_upgrade_cb.isChecked(),
             "auto_upgrade_storages": self.auto_upgrade_storages_cb.isChecked(),
             "event_active": self.event_active_cb.isChecked(),
-            "event_troop_button": self.event_troop_combo.currentText(),
-            "event_troop_count": int(self.event_count_combo.currentText()),
+            "event_troops": self._collect_event_troops(),
             "do_ranked": self.do_ranked_cb.isChecked(),
             "siege_machine_active": self.siege_cb.isChecked(),
             "clan_games_enabled": self.clan_games_cb.isChecked(),
@@ -1004,7 +1079,17 @@ _EVENT_TROOP_OPTIONS = [
     "superdrag_button.png",
     "barb_button.png",
     "gold_drag_icon.png",
+    "elephant_rider.PNG",
+    "super_valk.PNG",
 ]
+
+
+def _pretty_troop_name(template: str) -> str:
+    """Turn a template filename into a readable label, e.g. 'elephant_rider.PNG' -> 'Elephant Rider'."""
+    name = template.rsplit(".", 1)[0]
+    if name.endswith("_button"):
+        name = name[: -len("_button")]
+    return name.replace("_", " ").title()
 
 # ─── Setting definitions for Mass Configure ──────────────────────────────────
 # Each entry: (display_name, config_key, widget_type, options_list_or_None)
@@ -1019,8 +1104,6 @@ _MASS_SETTINGS = [
     ("Auto Upgrade Walls",     "auto_upgrade_walls",   "bool",  None),
     ("Auto Upgrade Storages",  "auto_upgrade_storages","bool",  None),
     ("Event Active",           "event_active",         "bool",  None),
-    ("Event Troop",            "event_troop_button",   "combo", _EVENT_TROOP_OPTIONS),
-    ("Event Troop Count",      "event_troop_count",    "combo", [str(i) for i in range(1, 61)]),
     ("Do Ranked",              "do_ranked",            "bool",  None),
     ("Siege Machine Active",   "siege_machine_active", "bool",  None),
     ("Clan Games Active",      "clan_games_enabled",   "bool",  None),

@@ -264,13 +264,7 @@ CONFIG = {
     # Event and Siege Machine features
     "event_active": False,  # Set to True to place event dragons
     "event_troop_count": 50,
-    # Multiple event troops. When this list is non-empty it OVERRIDES the single
-    # event_troop_button/event_troop_count settings for every account while event_active is on.
-    # Leave empty ([]) to fall back to the single-troop behaviour.
-    "event_troops": [
-        {"template": "elephant_rider.PNG", "count": 20},   # TODO: set real amount
-        {"template": "super_valk.PNG",     "count": 20},   # TODO: set real amount
-    ],
+    "event_troops": [],   # list of {"template": str, "count": int}; when non-empty it overrides the single event_troop_button/count
     "siege_machine_active": False,  # Set to True to place siege machine
     
     # Time to wait (in seconds) after placing all heroes before activating their abilities
