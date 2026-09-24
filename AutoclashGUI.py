@@ -1081,6 +1081,7 @@ _EVENT_TROOP_OPTIONS = [
     "gold_drag_icon.png",
     "elephant_rider.PNG",
     "super_valk.PNG",
+    "kane.PNG",
 ]
 
 
