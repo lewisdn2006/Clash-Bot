@@ -10,7 +10,7 @@ Workers
 * HomeVillageWorker      — single-account infinite/finite battle loop
 * FillAccountsWorker     — multi-account fill-until-full loop
 * BuilderBaseWorker      — single-account BB loop
-* BBFillAccountsWorker   — multi-account BB fill loop
+* BBCycleAccountsWorker  — multi-account BB cycle loop (N attacks per account)
 * ClanGamesWorker        — Clan Games challenge cycler (all accounts)
 """
 
@@ -1715,53 +1715,72 @@ class BuilderBaseWorker(QThread, _RecoveryMixin):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 4) BBFillAccountsWorker
+# 5) BBCycleAccountsWorker
 # ═══════════════════════════════════════════════════════════════════════════
 
-class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
-    """Builder Base fill-accounts mode."""
+class BBCycleAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
+    """Builder Base cycle-accounts mode.
+
+    Loops forever over the selected accounts (in the order given), switching
+    to each one, travelling to the Builder Base and doing ``attacks_per_account``
+    BB attacks before moving on — the Builder Base equivalent of
+    CycleAccountsWorker. Replaces the old BB Fill mode, whose "storages full"
+    check used the Home Village gold/elixir bar pixels and so never worked on
+    the Builder Base.
+    """
 
     status_update = Signal(str, str)
     battle_completed = Signal(int, int)    # (count, stars)
     account_detected = Signal(str)
-    fill_progress = Signal(int, int)
     overlay_draw = Signal(list, str)       # (detections, title)
     overlay_clear = Signal()
     error_occurred = Signal(str)
     finished = Signal()
 
-    def __init__(self, selected_accounts: List[str], parent=None):
+    def __init__(self, selected_accounts: List[str], attacks_per_account: int, parent=None):
         super().__init__(parent)
         self._stop_requested = False
         Autoclash._default_session.stop_requested = False
         self.selected_accounts = list(selected_accounts)
-        self.completed_accounts: Set[str] = set()
+        self.attacks_per_account = max(1, int(attacks_per_account))
 
     def stop(self):
         self._stop_requested = True
+        # Stop both the BB session (battle loops) and the Home session
+        # (account-switch scanning uses Autoclash._default_session).
         Autoclash_BB._default_session.shutdown_requested = True
-
-    @staticmethod
-    def _are_bb_storages_full() -> bool:
-        return bool(Autoclash.check_gold_full()) and bool(Autoclash.check_elixir_full())
+        Autoclash._default_session.stop_requested = True
 
     def _bb_stopped(self) -> bool:
         return self._stop_requested or Autoclash_BB._default_session.shutdown_requested
 
+    def _wait_if_paused(self) -> None:
+        """Honour the dashboard Pause/Resume buttons between steps."""
+        if Autoclash._default_session.pause_requested:
+            self.status_update.emit("Paused", "Paused from dashboard — waiting for Resume")
+            bot_reporter.update_phase("PAUSED", "Paused from dashboard")
+            while Autoclash._default_session.pause_requested and not self._bb_stopped():
+                time.sleep(0.2)
+            if not self._bb_stopped():
+                bot_reporter.update_phase("Resuming", "Resuming BB cycle...")
+
     # noinspection PyUnresolvedReferences
     def run(self):  # noqa: C901
         original_thresh = Autoclash_BB.CONFIG.get("TEMPLATE_THRESH_DEFAULT", 0.85)
+        _ctrl_d_registered = False
         try:
             bot_reporter.start()
             bot_reporter.set_mode('bb')
-            self.status_update.emit("Initializing", "Starting BB Fill Accounts automation...")
-            bot_reporter.update_phase("Initializing", "Starting BB Fill Accounts automation...")
-            bot_reporter.log("BB Fill Accounts automation started")
-            self.overlay_draw.emit([], "BB Fill Accounts — Initialising")
+            self.status_update.emit("Initializing", "Starting BB Cycle Accounts automation...")
+            bot_reporter.update_phase("Initializing", "Starting BB Cycle Accounts automation...")
+            bot_reporter.log(
+                f"BB Cycle Accounts started — {len(self.selected_accounts)} account(s), "
+                f"{self.attacks_per_account} attack(s) each"
+            )
+            self.overlay_draw.emit([], "BB Cycle Accounts — Initialising")
             _set_overlay_callback(self.overlay_draw.emit)
             Autoclash_BB._default_session.shutdown_requested = False
             Autoclash_BB.space_listener.start()
-            _ctrl_d_registered = False
             try:
                 import keyboard as _kb_disconnect
                 def _on_disconnect():
@@ -1777,9 +1796,9 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                         log(f"WARNING: Failed to launch disconnect.bat: {_e}")
                 _kb_disconnect.add_hotkey("ctrl+d", _on_disconnect)
                 _ctrl_d_registered = True
-                log("BBFillAccountsWorker: Ctrl+D disconnect enabled")
+                log("BBCycleAccountsWorker: Ctrl+D disconnect enabled")
             except Exception:
-                log("BBFillAccountsWorker: keyboard module unavailable; Ctrl+D disabled")
+                log("BBCycleAccountsWorker: keyboard module unavailable; Ctrl+D disabled")
             import bot_reporter as _br
             _br.register_command_callback('hard_reset', self._perform_hard_game_restart)
             _br.register_command_callback('pause',      _cmd_pause)
@@ -1794,72 +1813,92 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
             Autoclash_BB.stats["star_counts"] = {i: 0 for i in range(7)}
             Autoclash_BB.stats["start_time"] = time.time()
 
+            if not self.selected_accounts:
+                self.status_update.emit("Error", "No accounts selected")
+                return
+
             battle_count = 0
+            account_index = 0
+            consecutive_switch_failures = 0
 
             while not self._bb_stopped():
-                remaining = [a for a in self.selected_accounts if a not in self.completed_accounts]
-                if not remaining:
+                self._wait_if_paused()
+                if self._bb_stopped():
                     break
 
-                self.fill_progress.emit(len(self.completed_accounts), len(self.selected_accounts))
+                target = self.selected_accounts[account_index % len(self.selected_accounts)]
+                account_index += 1
 
-                self.overlay_draw.emit([], "BB Fill Accounts — Switching account")
-                target = _switch_to_target_fill_account(remaining, hard_reset_fn=self._perform_hard_game_restart)
-                if not target:
+                # ── Switch to the target account ──────────────────────────
+                self.overlay_draw.emit([], f"BB Cycle Accounts — Switching to '{target}'")
+                self.status_update.emit("Switch", f"Switching to account '{target}'...")
+                bot_reporter.update_phase("Switch", f"Switching to account '{target}'...")
+                bot_reporter.log(f"BB cycle: switching to {target}")
+                switched = _switch_to_target_fill_account([target], hard_reset_fn=self._perform_hard_game_restart)
+                if not switched:
                     if self._bb_stopped():
                         break
-                    self._handle_repeated_failure("bbfill.switch.account", action_label="Switch")
-                    bot_reporter.report_error("BB Fill: failed to switch account")
+                    consecutive_switch_failures += 1
+                    msg = (f"Failed to switch to '{target}', skipping... "
+                           f"({consecutive_switch_failures}/{len(self.selected_accounts)} consecutive failures)")
+                    self.status_update.emit("Switch", msg)
+                    bot_reporter.report_error(f"BB cycle: failed to switch to '{target}'")
+                    if consecutive_switch_failures >= len(self.selected_accounts):
+                        consecutive_switch_failures = 0
+                        self.status_update.emit("Recovery", "All accounts failed to switch — performing hard game restart...")
+                        bot_reporter.update_phase("Recovery", "All accounts failed to switch — hard restart")
+                        self._perform_hard_game_restart()
                     time.sleep(3)
                     continue
 
-                self.account_detected.emit(target)
-                bot_reporter.update_account(target)
-                bot_reporter.update_phase("Switch", f"Switched to '{target}'")
+                consecutive_switch_failures = 0
+                self.account_detected.emit(switched)
+                bot_reporter.update_account(switched)
+                bot_reporter.update_phase("Switch", f"Switched to '{switched}'")
 
-                self.overlay_draw.emit([], f"BB Fill Accounts — Preparing BB for '{target}'")
+                # ── Travel to the Builder Base ────────────────────────────
+                self.overlay_draw.emit([], f"BB Cycle Accounts — Travelling to Builder Base on '{switched}'")
                 if not self._prepare_builder_base_after_switch(max_attempts=5):
                     if self._bb_stopped():
                         break
-                    self._handle_repeated_failure("bbfill.prepare.after_switch", action_label="Switch")
+                    self._handle_repeated_failure("bbcycle.prepare.after_switch", action_label="Switch")
+                    self.status_update.emit("BB Prep", f"Could not reach the Builder Base on '{switched}' — moving on")
+                    bot_reporter.report_error(f"BB cycle: could not reach Builder Base on '{switched}'")
                     time.sleep(2)
                     continue
 
-                if self._are_bb_storages_full():
-                    self.completed_accounts.add(target)
-                    self.status_update.emit("Storage", f"'{target}' already full for BB. Marked complete.")
-                    bot_reporter.update_phase("Storage", f"'{target}' already full for BB")
-                    continue
-
+                # ── N attacks on this account ─────────────────────────────
+                attacks_done = 0
                 consecutive_p1_fail = 0
-                while not self._bb_stopped():
-                    if self._are_bb_storages_full():
-                        self.completed_accounts.add(target)
-                        self.status_update.emit("Storage", f"'{target}' is now full for BB.")
+                consecutive_p2_fail = 0
+                while not self._bb_stopped() and attacks_done < self.attacks_per_account:
+                    self._wait_if_paused()
+                    if self._bb_stopped():
                         break
 
-                    self.overlay_draw.emit([], f"BB Fill Accounts — Battle {battle_count + 1}: Finding match")
-                    self.status_update.emit("Battle", f"Starting BB fill battle {battle_count + 1} on '{target}'...")
-                    bot_reporter.update_phase("Battle", f"Starting BB fill battle {battle_count + 1} on '{target}'")
+                    label = f"Attack {attacks_done + 1}/{self.attacks_per_account} on '{switched}' (total: {battle_count + 1})"
+                    self.overlay_draw.emit([], f"BB Cycle Accounts — {label}: Finding match")
+                    self.status_update.emit("Battle", f"{label}...")
+                    bot_reporter.update_phase("Battle", f"{label}...")
 
                     if not Autoclash_BB.phase1_find_match():
                         if self._bb_stopped():
                             break
                         consecutive_p1_fail += 1
-                        self._handle_repeated_failure("bbfill.phase1.find_match", action_label="BB Find")
-
+                        self._handle_repeated_failure("bbcycle.phase1.find_match", action_label="BB Find")
                         if consecutive_p1_fail >= 5:
+                            # Probably not on the Builder Base any more — try to get back once,
+                            # otherwise give up on this account and move to the next one.
                             consecutive_p1_fail = 0
                             if not self._prepare_builder_base_after_switch(max_attempts=5):
-                                self._handle_repeated_failure("bbfill.prepare.after_retries", action_label="Switch")
+                                self.status_update.emit("BB Find", f"Lost the Builder Base on '{switched}' — moving to next account")
                                 break
                         time.sleep(2)
                         continue
-
                     consecutive_p1_fail = 0
                     time.sleep(1)
 
-                    self.overlay_draw.emit([], f"BB Fill Accounts — Battle {battle_count + 1}: Attacking")
+                    self.overlay_draw.emit([], f"BB Cycle Accounts — {label}: Attacking")
                     try:
                         _p2_ok = Autoclash_BB.phase2_attack()
                     except SystemExit:
@@ -1868,34 +1907,37 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                     if not _p2_ok:
                         if self._bb_stopped():
                             break
-                        self._handle_repeated_failure("bbfill.phase2.attack", action_label="Phase 2")
+                        consecutive_p2_fail += 1
+                        self._handle_repeated_failure("bbcycle.phase2.attack", action_label="Phase 2")
+                        if consecutive_p2_fail >= 3:
+                            self.status_update.emit("Phase 2", f"3 failed attacks in a row on '{switched}' — moving to next account")
+                            break
                         time.sleep(2)
                         continue
+                    consecutive_p2_fail = 0
 
+                    attacks_done += 1
                     battle_count += 1
                     stars = Autoclash_BB.stats.get("last_battle_stars", 0)
                     Autoclash_BB.stats["battles_completed"] = battle_count
                     self._reset_failure_watchdog()
                     self.battle_completed.emit(battle_count, stars)
-                    bot_reporter.report_bb_battle(account_name=target, stars=int(stars))
-                    self.overlay_draw.emit([], f"BB Fill Accounts — Battle {battle_count} complete  ({stars} stars)")
-                    self.status_update.emit("Idle", f"BB fill battle {battle_count} complete on '{target}'")
-                    bot_reporter.update_phase("Idle", f"BB fill battle {battle_count} complete on '{target}'")
+                    bot_reporter.report_bb_battle(account_name=switched, stars=int(stars))
+                    self.overlay_draw.emit([], f"BB Cycle Accounts — Battle {battle_count} complete  ({stars} stars)")
+                    self.status_update.emit("Idle", f"BB attack {attacks_done}/{self.attacks_per_account} complete on '{switched}' ({stars} stars)")
+                    bot_reporter.update_phase("Idle", f"BB attack {attacks_done}/{self.attacks_per_account} complete on '{switched}'")
                     time.sleep(2)
 
             Autoclash_BB.space_listener.stop()
 
             if self._bb_stopped():
-                self.status_update.emit("Stopped", "BB Fill Accounts stopped")
-                bot_reporter.update_phase("Stopped", "BB Fill Accounts stopped")
-            else:
-                self.status_update.emit("Complete", "BB Fill Accounts completed: all selected accounts are full")
-                bot_reporter.update_phase("Complete", "BB Fill Accounts completed")
+                self.status_update.emit("Stopped", "BB Cycle Accounts stopped")
+                bot_reporter.update_phase("Stopped", "BB Cycle Accounts stopped")
 
         except Exception as e:
-            log(f"FATAL ERROR in BB fill automation thread: {e}")
+            log(f"FATAL ERROR in BB cycle automation thread: {e}")
             self.error_occurred.emit(str(e))
-            bot_reporter.report_error(f"FATAL BB Fill worker error: {e}")
+            bot_reporter.report_error(f"FATAL BB Cycle worker error: {e}")
         finally:
             _set_overlay_callback(None)
             self.overlay_clear.emit()
@@ -1905,6 +1947,10 @@ class BBFillAccountsWorker(QThread, _RecoveryMixin, _ContextMixin):
                     _kb_disconnect.remove_hotkey("ctrl+d")
                 except Exception:
                     pass
+            try:
+                Autoclash_BB.space_listener.stop()
+            except Exception:
+                pass
             bot_reporter.stop()
             Autoclash_BB._default_session.shutdown_requested = False
             Autoclash_BB.CONFIG["TEMPLATE_THRESH_DEFAULT"] = original_thresh

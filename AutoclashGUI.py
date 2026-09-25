@@ -14,7 +14,7 @@ Pages (QStackedWidget)
 3  AccountConfigPage      — per-account settings editor
 4  HomeProgressPage       — live battle stats, loot, star bars
 5  BBConfigPage           — BB start, BB fill option
-6  BBFillAccountsPage     — multi-select for BB fill
+6  BBCycleAccountsPage    — multi-select + attacks-per-account for BB cycling
 7  BBProgressPage         — BB battle stats, star bars
 8  StatsPage              — CSV-backed account stats table
 9  ClanGamesProgressPage  — Clan Games cycler status & stop
@@ -85,7 +85,7 @@ from AutomationWorker import (
     FillAccountsWorker,
     CycleAccountsWorker,
     BuilderBaseWorker,
-    BBFillAccountsWorker,
+    BBCycleAccountsWorker,
     ClanGamesWorker,
     ClanGamesMasterWorker,
     ClanScouterWorker,
@@ -1447,9 +1447,9 @@ class BBConfigPage(QWidget):
         self.start_btn.setFixedWidth(240)
         layout.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        self.fill_btn = QPushButton("Fill Accounts")
-        self.fill_btn.setFixedWidth(240)
-        layout.addWidget(self.fill_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.cycle_btn = QPushButton("Cycle Accounts")
+        self.cycle_btn.setFixedWidth(240)
+        layout.addWidget(self.cycle_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         self.back_btn = QPushButton("Back")
         self.back_btn.setFixedWidth(240)
@@ -1463,19 +1463,26 @@ class BBConfigPage(QWidget):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Page 6 — BB Fill Accounts
+# Page 6 — BB Cycle Accounts
 # ═══════════════════════════════════════════════════════════════════════════
 
-class BBFillAccountsPage(QWidget):
+class BBCycleAccountsPage(QWidget):
+    """Pick Builder Base accounts to cycle through and how many attacks each.
+
+    Selections and the attack count are remembered in bb_cycle_state.json.
+    """
+
+    _STATE_FILE = "bb_cycle_state.json"
+
     def __init__(self, accounts: list, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        layout.addWidget(_title("Builder Base Fill Accounts"))
+        layout.addWidget(_title("Builder Base Cycle Accounts"))
         layout.addWidget(_subtitle(
-            "Select accounts to fill in Builder Base mode.\n"
-            "The bot switches accounts and battles until storage-full checks pass."
+            "Select accounts and set attacks per account.\n"
+            "The bot cycles through the accounts indefinitely, doing N Builder Base attacks on each."
         ))
 
         self.checkboxes: Dict[str, QCheckBox] = {}
@@ -1486,7 +1493,25 @@ class BBFillAccountsPage(QWidget):
             grid.addWidget(cb, i // 2, i % 2)
         layout.addLayout(grid)
 
-        self.start_btn = QPushButton("Start BB Fill Accounts")
+        self.select_all_btn = QPushButton("Select All")
+        self.select_all_btn.setFixedWidth(240)
+        self.select_all_btn.clicked.connect(self._toggle_all)
+        layout.addWidget(self.select_all_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        attacks_row = QHBoxLayout()
+        attacks_row.setSpacing(10)
+        attacks_row.addStretch()
+        attacks_row.addWidget(QLabel("Attacks per account:"))
+        self.attacks_spin = QSpinBox()
+        self.attacks_spin.setMinimum(1)
+        self.attacks_spin.setMaximum(99)
+        self.attacks_spin.setValue(5)
+        self.attacks_spin.setFixedWidth(80)
+        attacks_row.addWidget(self.attacks_spin)
+        attacks_row.addStretch()
+        layout.addLayout(attacks_row)
+
+        self.start_btn = QPushButton("Start BB Cycle Accounts")
         self.start_btn.setObjectName("primary_btn")
         self.start_btn.setFixedWidth(240)
         layout.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -1501,8 +1526,43 @@ class BBFillAccountsPage(QWidget):
         _page_lbl.move(5, 5)
         _page_lbl.raise_()
 
+        self.load_state()
+
+    def _toggle_all(self):
+        all_checked = all(cb.isChecked() for cb in self.checkboxes.values())
+        for cb in self.checkboxes.values():
+            cb.setChecked(not all_checked)
+        self.select_all_btn.setText("Deselect All" if not all_checked else "Select All")
+
     def selected_accounts(self) -> List[str]:
         return [name for name, cb in self.checkboxes.items() if cb.isChecked()]
+
+    def attacks_per_account(self) -> int:
+        return self.attacks_spin.value()
+
+    def save_state(self) -> None:
+        state = {
+            "selected": self.selected_accounts(),
+            "attacks_per_account": self.attacks_per_account(),
+        }
+        try:
+            path = Path(__file__).parent / self._STATE_FILE
+            path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        except Exception as e:
+            print(f"BBCycleAccountsPage: failed to save state: {e}")
+
+    def load_state(self) -> None:
+        try:
+            path = Path(__file__).parent / self._STATE_FILE
+            if not path.exists():
+                return
+            state = json.loads(path.read_text(encoding="utf-8"))
+            selected = set(state.get("selected", []))
+            for name, cb in self.checkboxes.items():
+                cb.setChecked(name in selected)
+            self.attacks_spin.setValue(int(state.get("attacks_per_account", 5)))
+        except Exception as e:
+            print(f"BBCycleAccountsPage: failed to load state: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2353,7 +2413,7 @@ class AutoclashGUI(QMainWindow):
     PAGE_ACCOUNT_CONFIG = 3
     PAGE_HOME_PROGRESS = 4
     PAGE_BB_CONFIG = 5
-    PAGE_BB_FILL = 6
+    PAGE_BB_CYCLE = 6
     PAGE_BB_PROGRESS = 7
     PAGE_STATS = 8
     PAGE_CLAN_GAMES = 9
@@ -2373,7 +2433,7 @@ class AutoclashGUI(QMainWindow):
         PAGE_ACCOUNT_CONFIG: (700, 900),
         PAGE_HOME_PROGRESS: (900, 780),
         PAGE_BB_CONFIG: (700, 500),
-        PAGE_BB_FILL: (700, 600),
+        PAGE_BB_CYCLE: (700, 620),
         PAGE_BB_PROGRESS: (900, 780),
         PAGE_STATS: (1200, 900),
         PAGE_CLAN_GAMES: (700, 420),
@@ -2392,7 +2452,7 @@ class AutoclashGUI(QMainWindow):
         self.resize(700, 500)
 
         # --- State ---
-        self.worker: Optional[HomeVillageWorker | FillAccountsWorker | CycleAccountsWorker | BuilderBaseWorker | BBFillAccountsWorker | ClanGamesWorker | ClanGamesMasterWorker | ClanScouterWorker | ClanCapitalWorker | UpgradeAccountsWorker | AccountCreationWorker] = None
+        self.worker: Optional[HomeVillageWorker | FillAccountsWorker | CycleAccountsWorker | BuilderBaseWorker | BBCycleAccountsWorker | ClanGamesWorker | ClanGamesMasterWorker | ClanScouterWorker | ClanCapitalWorker | UpgradeAccountsWorker | AccountCreationWorker] = None
         self.current_detected_account: Optional[str] = None
         self.session_total_stats = _new_session_stats()
         self.session_account_stats: Dict[str, dict] = {}
@@ -2420,7 +2480,7 @@ class AutoclashGUI(QMainWindow):
         self.pg_account_config = AccountConfigPage(self._account_names())
         self.pg_home_progress = HomeProgressPage()
         self.pg_bb_config = BBConfigPage()
-        self.pg_bb_fill = BBFillAccountsPage(account_list)
+        self.pg_bb_cycle = BBCycleAccountsPage(account_list)
         self.pg_bb_progress = BBProgressPage()
         self.pg_stats = StatsPage()
         self.pg_clan_games = ClanGamesProgressPage()
@@ -2443,7 +2503,7 @@ class AutoclashGUI(QMainWindow):
             self.pg_account_config,
             self.pg_home_progress,
             self.pg_bb_config,
-            self.pg_bb_fill,
+            self.pg_bb_cycle,
             self.pg_bb_progress,
             self.pg_stats,
             self.pg_clan_games,
@@ -2504,12 +2564,12 @@ class AutoclashGUI(QMainWindow):
 
         # BB config
         self.pg_bb_config.start_btn.clicked.connect(self._start_bb_automation)
-        self.pg_bb_config.fill_btn.clicked.connect(lambda: self._navigate(self.PAGE_BB_FILL))
+        self.pg_bb_config.cycle_btn.clicked.connect(lambda: self._navigate(self.PAGE_BB_CYCLE))
         self.pg_bb_config.back_btn.clicked.connect(self._go_back)
 
-        # BB fill
-        self.pg_bb_fill.start_btn.clicked.connect(self._start_bb_fill)
-        self.pg_bb_fill.back_btn.clicked.connect(self._go_back)
+        # BB cycle
+        self.pg_bb_cycle.start_btn.clicked.connect(self._start_bb_cycle)
+        self.pg_bb_cycle.back_btn.clicked.connect(self._go_back)
 
         # BB progress
         self.pg_bb_progress.stop_btn.clicked.connect(self._stop_bb)
@@ -3061,17 +3121,19 @@ class AutoclashGUI(QMainWindow):
         self._navigate(self.PAGE_BB_PROGRESS)
 
     # ------------------------------------------------------------------
-    # Start BB Fill
+    # Start BB Cycle
     # ------------------------------------------------------------------
 
-    def _start_bb_fill(self):
+    def _start_bb_cycle(self):
         selected = [
-            normalize_account_name(n) for n in self.pg_bb_fill.selected_accounts()
+            normalize_account_name(n) for n in self.pg_bb_cycle.selected_accounts()
             if normalize_account_name(n) in APPROVED_ACCOUNTS
         ]
         if not selected:
-            QMessageBox.warning(self, "No Accounts", "Select at least one account for BB Fill mode")
+            QMessageBox.warning(self, "No Accounts", "Select at least one account for BB Cycle Accounts mode")
             return
+        attacks = self.pg_bb_cycle.attacks_per_account()
+        self.pg_bb_cycle.save_state()
 
         Autoclash_BB._default_session.shutdown_requested = False
         Autoclash_BB.stats["battles_completed"] = 0
@@ -3080,7 +3142,7 @@ class AutoclashGUI(QMainWindow):
         Autoclash_BB.stats["star_counts"] = {i: 0 for i in range(7)}
         Autoclash_BB.stats["start_time"] = time.time()
 
-        self.worker = BBFillAccountsWorker(sorted(set(selected)))
+        self.worker = BBCycleAccountsWorker(sorted(set(selected)), attacks)
         self.worker.status_update.connect(self._on_status_update)
         self.worker.battle_completed.connect(self._on_bb_battle_completed)
         self.worker.account_detected.connect(self._on_account_detected)
@@ -3091,7 +3153,7 @@ class AutoclashGUI(QMainWindow):
         self.worker.start()
 
         self.pg_bb_progress.battles_label.setText("0")
-        self.pg_bb_progress.action_label.setText("Starting BB Fill Accounts...")
+        self.pg_bb_progress.action_label.setText("Starting BB Cycle Accounts...")
         self._navigate(self.PAGE_BB_PROGRESS)
 
     # ------------------------------------------------------------------
